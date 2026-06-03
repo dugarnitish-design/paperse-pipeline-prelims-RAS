@@ -1,0 +1,8 @@
+[2026-05-27T15:06:36.482Z] === PaperSe Daily Run Started ===
+[2026-05-27T15:06:36.482Z] Fetching PIB articles...
+[2026-05-27T15:09:21.719Z] PIB: 41 articles | SUJAS: true
+[2026-05-27T15:14:09.696Z] Selected: 4 | Discarded: 0 | PYQs: 24 | MCQs: 8
+[2026-05-27T15:14:09.705Z] Raw output saved: ./outputs/2026-05-27/raw-output.txt
+[2026-05-27T15:14:09.706Z] MCQs saved: ./outputs/2026-05-27/mcqs.json (8 questions)
+[2026-05-27T15:14:10.925Z] English PDF generated: ./outputs/2026-05-27/english.pdf
+[2026-05-27T15:14:11.267Z] ERROR: Command failed: /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 generate-pdf-hindi.py 2026-05-27

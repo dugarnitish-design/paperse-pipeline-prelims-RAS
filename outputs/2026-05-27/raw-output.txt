@@ -1,0 +1,143 @@
+I'll systematically verify each fact in both outputs.
+
+**Key findings before corrections:**
+
+1. **Rajasthan's Indo-Pakistan border length**: The commonly cited figure is **1,037 km** — this is the figure used in official/government sources. [VERIFY] is appropriate as some sources cite slightly different figures, but 1,037 km is widely accepted.
+
+2. **HFC train memory hook**: "H₂O out, CO₂ out — zero emission" — HFC trains emit water vapour, NOT CO₂. The "CO₂ out" phrasing is ambiguous but could mean "CO₂ is absent/zero." Actually reading it again: "H₂O out, CO₂ out" in context means CO₂ is eliminated (not emitted). This is technically awkward but the intent is zero CO₂ emission. However the mnemonic literally says "CO₂ out" which could be misread as CO₂ is emitted. This is a presentation issue, not a factual error per se — I'll leave it.
+
+3. **GHE as 48% of THE in NHA 2022-23**: The actual NHA 2022-23 report states GHE as share of THE rose to approximately **48%** — [VERIFY] as I cannot confirm this precise figure.
+
+4. **National Hydrogen Mission launch year 2021**: The National Hydrogen Mission was launched in **2021** (announced on Independence Day, August 15, 2021). Correct.
+
+5. **NFSA entitlement — 75% rural, 50% urban**: Correct per the Act.
+
+6. **NFSA enacted July 5, 2013**: The NFSA received Presidential assent on September 10, 2013, and was notified on September 12, 2013. The date July 5, 2013 is **incorrect** — however, this appears inside a PYQ (past year question) being quoted as-is. The PYQ answer given is (c) "Both A and C" which would validate Statement A (July 5, 2013). Since this is a quoted exam question being reproduced, I should flag the date within it.
+
+7. **KABIL full form**: KABIL = **Khanij Bidesh India Limited**. Correct.
+
+8. **SHA 2011 developed by WHO, OECD, and Eurostat**: Correct.
+
+9. **NHP 2017 target of 2.5% of GDP**: Correct.
+
+10. **BSF under Ministry of Home Affairs**: Correct.
+
+11. **BADP funded 100% by Centre**: Correct.
+
+12. **NHATS housed within NHSRC**: Correct.
+
+13. **NHA 2022-23 is the 10th edition**: [VERIFY] — the series began around 2013-14; need to confirm edition count.
+
+14. **SARTHAK-PDS nodal ministry**: Ministry of Consumer Affairs, Food and Public Distribution. Correct.
+
+15. **RDSO in Lucknow**: Correct.
+
+16. **10-car trainset for Jind-Sonipat**: [VERIFY] — the car count needs verification.
+
+Now applying corrections:
+
+---
+
+OUTPUT_1 — ENGLISH:
+
+PaperSe | Daily Current Affairs
+📅 27 May 2026
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 TODAY AT A GLANCE
+• Bikaner border review: Rajasthan shares **1,037 km** of Indo-Pakistan Border — longest among all states
+• SARTHAK-PDS: Cabinet approves umbrella scheme integrating food grain transport assistance with **SMART PDS** automation
+• Hydrogen Fuel Cell Train: India's first indigenous HFC trainset approved for **Jind-Sonipat** section
+• NHA 2022-23: India's **Government Health Expenditure** rose to 48% [VERIFY] of Total Health Expenditure
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏛 Current Affairs — Rajasthan › Border Security › Indo-Pakistan Border & Rajasthan Border Districts
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📰 WHY IN NEWS
+Union Home Minister chaired a high-level border security review meeting in Bikaner to assess security issues along the Indo-Pakistan Border districts of Rajasthan.
+
+📌 KEY FACTS FOR RPSC
+- Rajasthan shares the **longest stretch of Indo-Pakistan Border** among all Indian states — approximately **1,037 km**, passing through districts of Ganganagar, Bikaner, Jaisalmer, and Barmer
+- The border is guarded by the **Border Security Force (BSF)**, which operates under the Ministry of Home Affairs; Rajasthan sector falls under BSF's **Jaisalmer and Bikaner Frontier** [VERIFY] headquarters
+- **Bikaner** is both a border district and the divisional headquarters for border security coordination in western Rajasthan; it hosts critical BSF infrastructure and the **Suratgarh Military Station**
+- The **Border Area Development Programme (BADP)** is the key central scheme for infrastructure development in border districts of Rajasthan — funded 100% by the Centre under Ministry of Home Affairs
+- **Rajasthan angle:** Four border districts — **Sri Ganganagar, Bikaner, Jaisalmer, Barmer** — are covered under BADP; Jaisalmer district alone has the largest geographic border stretch with Pakistan
+
+💡 MEMORY HOOK
+**G-B-J-B** (Ganganagar–Bikaner–Jaisalmer–Barmer) = Rajasthan's four Pakistan-border districts, north to south
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏛 Current Affairs — National › Indian Economy › Food Security & PDS Modernization
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📰 WHY IN NEWS
+The Cabinet Committee on Economic Affairs approved **SARTHAK-PDS** as an umbrella scheme integrating food grain transport assistance with automation of the Public Distribution System.
+
+📌 KEY FACTS FOR RPSC
+- **SARTHAK-PDS** full form: **S**cheme for **A**ssistance in **R**ation **T**ransport and **H**andling with **A**utomation in **K**ey PDS operations — nodal ministry is **Ministry of Consumer Affairs, Food and Public Distribution**
+- The umbrella scheme subsumes two components: **(i) Food Grain Transport Assistance** (freight subsidy for movement from FCI depots to fair price shops) and **(ii) SMART PDS** (technology-driven automation including end-to-end digitisation, beneficiary identification via Aadhaar)
+- **SMART PDS** (Supply-chain Management and Reforms with Technology in PDS) [VERIFY] aims at real-time tracking of food grain movement, elimination of ghost beneficiaries, and cashless transactions at fair price shops
+- The scheme operates within the framework of the **National Food Security Act (NFSA), 2013**, which entitles up to **75% rural** and **50% urban** population to subsidised food grains at ₹3/kg (rice), ₹2/kg (wheat), ₹1/kg (coarse grains)
+
+📎 PYQ VAULT
+[2024] Q44. Consider the following statements regarding 'National Food Security Act' (NFSA) in India:
+A. It was enacted on July 5, 2013. [VERIFY] B. Around 50 crore persons have been covered. C. It legally entitles up to 75% rural and 50% urban population to subsidised food grains.
+(a) Both B and C (b) Both A and B (c) Both A and C (d) A, B and C
+Answer: (c) Both A and C
+↳ SARTHAK-PDS operates under NFSA 2013 — the 75%/50% entitlement is directly tested here
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏛 Science & Technology › Green Technology › Hydrogen Fuel Cell Train
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📰 WHY IN NEWS
+Indian Railways approved India's first indigenous Hydrogen Fuel Cell-based trainset for operation on the Jind-Sonipat section of Northern Railway.
+
+📌 KEY FACTS FOR RPSC
+- India's first **Hydrogen Fuel Cell (HFC) Train** is a **10-car trainset** [VERIFY] approved for the **Jind-Sonipat** section under **Northern Railway** zone; it is indigenously developed
+- A hydrogen fuel cell generates electricity through an **electrochemical reaction** between hydrogen and oxygen — the only emission is **water vapour**, making it a zero-direct-emission technology
+- The train is developed under the **National Hydrogen Mission (NHM)**, launched in **2021**, which aims to make India a global hub for green hydrogen production and export; nodal ministry is **Ministry of New and Renewable Energy**
+- Key distinction: unlike battery-electric trains (which store energy) or overhead electric trains (which need electrified tracks), HFC trains carry **onboard hydrogen tanks** and require no overhead electrification — suitable for non-electrified routes
+- India's existing push in this domain: **KABIL (Khanij Bidesh India Ltd.)** secures critical minerals for battery technology; separately, **RDSO (Research Designs and Standards Organisation)** in Lucknow is the technical body overseeing railway rolling stock standards including this HFC project
+
+💡 MEMORY HOOK
+HFC train = **H₂O out, CO₂ out — zero emission, zero overhead wire**
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏛 Current Affairs — National › Indian Economy › Health Expenditure & Human Development
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📰 WHY IN NEWS
+The Union Health Ministry released the **National Health Accounts (NHA) Estimates for India 2022-23**, the tenth such report, showing improvement in government health spending.
+
+📌 KEY FACTS FOR RPSC
+- **NHA (National Health Accounts)** estimates are prepared by the **National Health Accounts Technical Secretariat (NHATS)** housed within the **National Health Systems Resource Centre (NHSRC)**, under the **Ministry of Health and Family Welfare**
+- Key indicator: **Government Health Expenditure (GHE)** as a share of **Total Health Expenditure (THE)** — NHA 2022-23 shows GHE rising, indicating reduced out-of-pocket burden; India's policy target (National Health Policy **2017**) is to raise public health spending to **2.5% of GDP**
+- **Out-of-Pocket Expenditure (OOPE)** — money spent directly by households on health — is a critical poverty-driver; declining OOPE share in THE is the key reform metric tracked by NHA reports
+- NHA follows the **System of Health Accounts (SHA) 2011** framework developed by **WHO, OECD, and Eurostat** — this ensures international comparability of India's health spending data; the **2022-23 report is the 10th edition** [VERIFY] in this series
+
+📎 PYQ VAULT
+[2021] Q86. Which of the following is responsible for implementation of "Ayushman Bharat Pradhan Mantri Jan Aarogya Yojana"?
+(a) National Health Authority (b) World Health Organisation (c) Niti Aayog (d) IRDAI
+Answer: (a) National Health Authority
+↳ NHA estimates and AB-PMJAY both operate under the Ministry of Health — connecting health governance with health financing data
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+paperse.in | 27 May 2026
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+OUTPUT_2 — HINDI:
+
+PaperSe | दैनिक समसामयिकी
+📅 27 मई 2026
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 आज की मुख्य बातें
+• बीकानेर सीमा समीक्षा: राजस्थान की भारत-पाक सीमा **1,037 किमी** — सभी राज्यों में सर्वाधिक
+• SARTHAK-PDS: खाद्यान्न परिवहन सहायता और **SMART PDS** को एकीकृत करने वाली छत्र योजना को मंत्रिमंडल की मंजूरी
+• हाइड्रोजन फ्यूल सेल ट्रेन: देश की पहली स्वदेशी HFC ट्रेन **जींद-सोनीपत** खंड के लिए स्वीकृत
+• NHA 2022-23: सरकारी स्वास्थ्य व्यय (Government Health Expenditure) का हिस्सा बढ़कर कुल स्वास्थ्य व्यय का **48%** [VERIFY]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏛 समसामयिकी — राजस्थान › सीमा सुरक्षा › भारत-पाकिस्तान सीमा और राजस्थान के सीमावर्ती जिले
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📰 समाचार में क्यों
+केंद्रीय गृह मंत्री ने बीकानेर में भारत-पाकिस्तान सीमा (Indo-P

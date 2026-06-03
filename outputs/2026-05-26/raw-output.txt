@@ -1,0 +1,297 @@
+OUTPUT_1 — ENGLISH:
+
+PaperSe | Daily Current Affairs
+📅 26 May 2026
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 TODAY AT A GLANCE
+• **High-Level Committee** on Demographic Change: Chaired by PM, mandated to study illegal immigration-driven demographic shifts
+• **National Sports Governance Act 2025**: Board and Tribunal rules notified in 2026 — **NSB** governs, **NST** adjudicates
+• **IIP** Base Year Revision: Shifts from **2011-12** to **2022-23**, new series effective June 2026
+• **PM-WANI**: **DoT**'s public Wi-Fi framework — no app, no registration required after latest reforms
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏛 Indian Polity & Constitution › Constitutional Bodies & Committees › High-Level Committee on Demographic Change
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📰 WHY IN NEWS
+The Government of India constituted a **High-Level Committee** on Demographic Change to study population shifts arising from illegal immigration and other abnormal factors, and to recommend measures to address them.
+
+📌 KEY FACTS FOR RPSC
+- The Committee is chaired by the **Prime Minister** of India, making it the highest-level executive committee of its kind on demographic issues.
+- Its mandate covers studying demographic changes caused specifically by illegal immigration and suggesting policy, administrative, and legislative remedies.
+- The Committee is constituted under the executive power of the Union (**Article 73** of the Constitution) — it is not a constitutional or statutory body.
+- Earlier committees on related themes include the **Illegal Migrants (Determination by Tribunals) Act 1983** (struck down in **2005**, Sarbananda Sonowal case) and the National Register of Citizens (**NRC**) process under the **Citizenship Act 1955**.
+
+💡 MEMORY HOOK
+PM chairs it, illegal immigration drives it — executive power under **Article 73**, not a constitutional commission.
+
+📎 PYQ VAULT
+2018 Q49. Central Vigilance Commission was set up on the recommendation of —
+(a) Gorwala Report (b) Kriplani Committee (c) Santhanam Committee (d) Administrative Reforms Commission of India
+Answer: (c) **Santhanam Committee**
+↳ RPSC links high-level committees to their origin and mandate — know who constituted this committee, under what authority, and why.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏛 Indian Polity & Constitution › Legislation & Rules › National Sports Governance Act 2025
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📰 WHY IN NEWS
+The Union Government notified the **National Sports Governance (National Sports Board) Rules 2026** and the **National Sports Governance (National Sports Tribunal) Rules 2026** under the **National Sports Governance Act 2025**.
+
+📌 KEY FACTS FOR RPSC
+- The **National Sports Governance Act** was enacted in **2025** — India's first comprehensive legislation to regulate governance of national sports federations.
+- The Act creates two distinct bodies: **National Sports Board (NSB)** — the apex regulatory and oversight body for sports federations — and **National Sports Tribunal (NST)** — a quasi-judicial body to adjudicate sports-related disputes.
+- **NSB** is under the Ministry of Youth Affairs and Sports; it oversees compliance of national sports federations with governance norms including elections, age limits, and transparency.
+- The Act applies to National Sports Federations (**NSFs**) that receive government grants or recognition, and is India's legislative response to the International Olympic Committee's demand for clean sports governance.
+
+💡 MEMORY HOOK
+**NSB** runs the game, **NST** settles the dispute — Board governs, Tribunal adjudicates, both born from **Act 2025**.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏛 Indian Economy › Index of Industrial Production › IIP Base Year Revision 2022-23
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📰 WHY IN NEWS
+**MoSPI** announced the revision of the **IIP** base year from **2011-12** to **2022-23**, with the new series to be released on 1 June 2026 — the most significant IIP revision in over a decade.
+
+📌 KEY FACTS FOR RPSC
+- **IIP (Index of Industrial Production)** measures the quantum of industrial output across Mining, Manufacturing, and Electricity sectors; published monthly by **MoSPI** (formerly CSO).
+- Base year history: **1993-94** → **2004-05** → **2011-12** → **2022-23** (effective June 2026) — each revision updates the basket of goods and weights to reflect current industrial structure.
+- The 2022-23 revision will increase the number of items tracked, update sector weights, and align with post-COVID industrial realities; Manufacturing continues to carry the highest weight (approximately **77%**).
+- IIP is a key high-frequency indicator used by **RBI** for monetary policy decisions and by the government to track industrial health between two GDP releases.
+
+💡 MEMORY HOOK
+IIP base years: **93-94, 04-05, 11-12, 22-23** — MoSPI publishes, RBI uses, Manufacturing dominates at **~77%**.
+
+📎 PYQ VAULT
+2015 Q67. Indicate the vital change in the measurement of National Income of India recently.
+(a) Base year changed from **2004-05** to **2011-12** (b) Calculation changed from factor cost to market prices (c) Calculation changed from current to constant prices (d) Both base year and calculation method changed
+Answer: (d) Both the base year and calculation method have changed
+↳ RPSC has directly tested base year revisions before — the IIP revision to **2022-23** follows the same pattern of updating base years to reflect current economic realities.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏛 Science & Technology › Digital Infrastructure & Telecom Policy › PM-WANI Framework
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📰 WHY IN NEWS
+The **Department of Telecommunications (DoT)** introduced major citizen-friendly reforms to the **PM-WANI** framework, simplifying public Wi-Fi access by removing barriers like mandatory app downloads and registrations.
+
+📌 KEY FACTS FOR RPSC
+- **PM-WANI** stands for Prime Minister Wi-Fi Access Network Interface — launched by **DoT** in **December 2020** to create a decentralised public Wi-Fi ecosystem across India.
+- The framework operates through three entities: **PDO** (Public Data Office — the local Wi-Fi hotspot provider), **PDOA** (Public Data Office Aggregator — manages multiple PDOs), and App Provider (authenticates users); no licence fee is required to become a PDO.
+- Key feature: PM-WANI was designed to allow small shopkeepers and local entrepreneurs to become Wi-Fi providers (PDOs) without any licence, enabling last-mile broadband access.
+- After **2026** reforms, users can connect to PM-WANI hotspots without downloading a separate app or completing fresh registration each time — friction-free access aligned with Digital Public Infrastructure goals.
+
+💡 MEMORY HOOK
+**PM-WANI** = Wi-Fi for All Nationally by India — DoT, **December 2020** — **PDO** sells, **PDOA** aggregates, App authenticates.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+paperse.in | 26 May 2026
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+OUTPUT_2 — HINDI:
+
+PaperSe | दैनिक समसामयिकी
+📅 26 मई 2026
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 आज की प्रमुख बातें
+• **जनसांख्यिकीय परिवर्तन** पर उच्च-स्तरीय समिति: PM की अध्यक्षता, अवैध आव्रजन से जुड़े जनसंख्या परिवर्तनों का अध्ययन
+• **National Sports Governance Act 2025**: Board और Tribunal के नियम 2026 में अधिसूचित
+• **IIP** आधार वर्ष संशोधन: **2011-12** से बदलकर **2022-23**, जून 2026 से लागू
+• **PM-WANI**: **DoT** द्वारा सार्वजनिक Wi-Fi तक पहुंच और आसान बनाई गई
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏛 भारतीय राजव्यवस्था › संवैधानिक निकाय व समितियां › जनसांख्यिकीय परिवर्तन पर उच्च-स्तरीय समिति
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📰 समाचार में क्यों
+भारत सरकार ने अवैध आव्रजन (**Illegal Immigration**) और अन्य असामान्य कारणों से उत्पन्न जनसांख्यिकीय परिवर्तनों का अध्ययन करने और उपाय सुझाने के लिए एक उच्च-स्तरीय समिति का गठन किया।
+
+📌 RPSC के लिए प्रमुख तथ्य
+- यह समिति भारत के **प्रधानमंत्री** की अध्यक्षता में गठित है — जनसांख्यिकीय विषय पर अब तक का सर्वोच्च कार्यकारी निकाय।
+- समिति का अधिदेश (Mandate): अवैध आव्रजन से होने वाले जनसंख्या परिवर्तनों का विश्लेषण और नीतिगत, प्रशासनिक व विधायी उपायों की अनुशंसा करना।
+- यह संविधान के **अनुच्छेद 73** के तहत संघ की कार्यकारी शक्ति द्वारा गठित है — यह संवैधानिक या सांविधिक निकाय नहीं है।
+- संबंधित पृष्ठभूमि: **Illegal Migrants (Determination by Tribunals) Act 1983** को **2005** में Sarbananda Sonowal बनाम भारत संघ मामले में सर्वोच्च न्यायालय ने रद्द किया था; **NRC** प्रक्रिया **Citizenship Act 1955** के अंतर्गत चलती है।
+
+💡 स्मरण सूत्र
+PM की अध्यक्षता, **अनुच्छेद 73** का आधार — संवैधानिक नहीं, कार्यकारी समिति है।
+
+📎 PYQ VAULT
+2018 Q49. केंद्रीय सतर्कता आयोग (CVC) किसकी सिफारिश पर स्थापित किया गया था?
+(a) गोरवाला रिपोर्ट (b) कृपलानी समिति (c) संथानम समिति (d) प्रशासनिक सुधार आयोग
+Answer: (c) **संथानम समिति**
+↳ RPSC उच्च-स्तरीय समितियों की उत्पत्ति और अधिदेश पर प्रश्न पूछता है — इस समिति के गठन का आधार और उद्देश्य याद रखें।
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏛 भारतीय राजव्यवस्था › विधान और नियम › National Sports Governance Act 2025
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📰 समाचार में क्यों
+केंद्र सरकार ने **National Sports Governance Act 2025** के अंतर्गत **National Sports Board (NSB) Rules 2026** और **National Sports Tribunal (NST) Rules 2026** अधिसूचित किए।
+
+📌 RPSC के लिए प्रमुख तथ्य
+- **National Sports Governance Act 2025** राष्ट्रीय खेल संघों (National Sports Federations) के शासन को नियमित करने वाला भारत का पहला व्यापक कानून है।
+- इस अधिनियम के तहत दो निकाय: **NSB (National Sports Board)** — खेल संघों की निगरानी करने वाला शीर्ष नियामक निकाय; **NST (National Sports Tribunal)** — खेल विवादों का निपटारा करने वाला अर्ध-न्यायिक (Quasi-Judicial) निकाय।
+- **NSB** युवा मामले एवं खेल मंत्रालय (Ministry of Youth Affairs and Sports) के अधीन कार्य करता है; यह NSFs में चुनाव, आयु सीमा और पारदर्शिता सुनिश्चित करता है।
+- यह अधिनियम उन **NSFs** पर लागू होता है जो सरकारी अनुदान या मान्यता प्राप्त करती हैं; अंतर्राष्ट्रीय ओलंपिक समिति की स्वच्छ खेल प्रशासन की मांग के जवाब में बनाया गया।
+
+💡 स्मरण सूत्र
+**NSB** खेल चलाता है, **NST** विवाद सुलझाता है — Board नियामक, Tribunal न्यायिक, दोनों **Act 2025** की देन।
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏛 भारतीय अर्थव्यवस्था › औद्योगिक उत्पादन सूचकांक › IIP आधार वर्ष संशोधन 2022-23
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📰 समाचार में क्यों
+**MoSPI** ने **IIP** का आधार वर्ष **2011-12** से बदलकर **2022-23** करने की घोषणा की, नई श्रृंखला 1 जून 2026 से जारी होगी।
+
+📌 RPSC के लिए प्रमुख तथ्य
+- **IIP (Index of Industrial Production** — औद्योगिक उत्पादन सूचकांक) तीन क्षेत्रों — Mining (खनन), Manufacturing (विनिर्माण), Electricity (बिजली) — के उत्पादन की मात्रा मापता है; **MoSPI** द्वारा मासिक प्रकाशित।
+- आधार वर्ष का क्रम: **1993-94** → **2004-05** → **2011-12** → **2022-23** (जून 2026 से प्रभावी) — प्रत्येक संशोधन में वस्तुओं की टोकरी और भार अद्यतन होते हैं।
+- 2022-23 श्रृंखला में अधिक वस्तुएं शामिल होंगी, क्षेत्रीय भार अद्यतन होगा; विनिर्माण क्षेत्र का भार अभी भी सर्वाधिक लगभग **77%** रहता है।
+- IIP एक उच्च-आवृत्ति (High-Frequency) संकेतक है — **RBI** मौद्रिक नीति निर्णयों में और सरकार दो GDP विज्ञप्तियों के बीच औद्योगिक स्वास्थ्य आंकने में इसका उपयोग करती है।
+
+💡 स्मरण सूत्र
+IIP आधार वर्ष: **93-94, 04-05, 11-12, 22-23** — MoSPI प्रकाशित करता है, Manufacturing का भार **~77%**।
+
+📎 PYQ VAULT
+2015 Q67. भारत के राष्ट्रीय आय मापन में हाल ही में क्या महत्वपूर्ण परिवर्तन हुआ?
+(a) आधार वर्ष **2004-05** से **2011-12** हुआ (b) गणना Factor Cost से Market Price पर बदली (c) गणना Current से Constant Prices पर बदली (d) आधार वर्ष और गणना पद्धति दोनों बदले
+Answer: (d) दोनों बदले
+↳ RPSC सांख्यिकीय सूचकांकों में आधार वर्ष परिवर्तन सीधे पूछता है — IIP का **2022-23** संशोधन इसी परंपरा का हिस्सा है।
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏛 विज्ञान एवं प्रौद्योगिकी › डिजिटल अवसंरचना और दूरसंचार नीति › PM-WANI फ्रेमवर्क
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📰 समाचार में क्यों
+**DoT** (Department of Telecommunications — दूरसंचार विभाग) ने **PM-WANI** फ्रेमवर्क में नागरिक-हितैषी सुधार लागू किए, जिससे सार्वजनिक Wi-Fi से जुड़ना और आसान हो गया।
+
+📌 RPSC के लिए प्रमुख तथ्य
+- **PM-WANI** का पूर्ण रूप: Prime Minister Wi-Fi Access Network Interface — **DoT** द्वारा **दिसंबर 2020** में लॉन्च, विकेंद्रीकृत (Decentralised) सार्वजनिक Wi-Fi पारिस्थितिकी तंत्र बनाने हेतु।
+- तीन स्तरीय संरचना: **PDO** (Public Data Office — स्थानीय Wi-Fi हॉटस्पॉट प्रदाता), **PDOA** (Public Data Office Aggregator — PDOs का प्रबंधन), App Provider (उपयोगकर्ता प्रमाणीकरण); PDO बनने के लिए कोई लाइसेंस शुल्क नहीं।
+- विशेष पहचान: छोटे दुकानदार और स्थानीय उद्यमी बिना किसी लाइसेंस के PDO बनकर Wi-Fi सेवा दे सकते हैं — अंतिम छोर (Last-Mile) ब्रॉडबैंड पहुंच का माध्यम।
+- **2026** सुधारों के बाद PM-WANI हॉटस्पॉट से जुड़ने के लिए अलग App डाउनलोड या बार-बार पंजीकरण की जरूरत नहीं — Digital Public Infrastructure के लक्ष्य के अनुरूप।
+
+💡 स्मरण सूत्र
+**PM-WANI** = सबके लिए Wi-Fi — DoT, **दिसंबर 2020** — **PDO** बेचता है, **PDOA** जोड़ता है, App प्रमाणित करता है।
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+paperse.in | 26 मई 2026
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+OUTPUT_3 — PRACTICE TEST JSON:
+
+{
+  "date": "26 May 2026",
+  "practice_test": {
+    "total": 8,
+    "time_per_question_seconds": 60,
+    "questions": [
+      {
+        "num": 1,
+        "type": "direct-recall",
+        "question": "PM-WANI stands for —",
+        "options": {
+          "a": "Prime Minister Wireless Access Network in India",
+          "b": "Prime Minister Wi-Fi Access Network Interface",
+          "c": "Public Mobile Wi-Fi Access and Network Integration",
+          "d": "Prime Minister Wide Area Network Initiative"
+        },
+        "correct": "b",
+        "difficulty": "easy",
+        "syllabus_topic": "Science & Technology > Digital Infrastructure",
+        "news_topic": "PM-WANI Framework",
+        "explanation": "PM-WANI stands for Prime Minister Wi-Fi Access Network Interface. It was launched by the Department of Telecommunications (DoT) in December 2020 to create a decentralised public Wi-Fi ecosystem across India, allowing small entrepreneurs to become PDOs (Public Data Offices) without any licence fee."
+      },
+      {
+        "num": 2,
+        "type": "statement-based",
+        "question": "Consider the following statements about PM-WANI:\n1. It was launched by the Ministry of Electronics and Information Technology (MeitY).\n2. A PDO (Public Data Office) can be set up without paying any licence fee.\n3. The App Provider in the PM-WANI ecosystem is responsible for user authentication.\nWhich of the statements given above is/are correct?",
+        "options": {
+          "a": "1 and 2 only",
+          "b": "2 and 3 only",
+          "c": "1 and 3 only",
+          "d": "1, 2 and 3"
+        },
+        "correct": "b",
+        "difficulty": "medium",
+        "syllabus_topic": "Science & Technology > Digital Infrastructure & Telecom Policy",
+        "news_topic": "PM-WANI Framework",
+        "explanation": "Statement 1 is incorrect: PM-WANI was launched by the Department of Telecommunications (DoT) under the Ministry of Communications, not MeitY. Statement 2 is correct: PDOs can be set up without any licence fee, enabling small shopkeepers to provide Wi-Fi. Statement 3 is correct: The App Provider authenticates users in the PM-WANI three-tier ecosystem (PDO, PDOA, App Provider)."
+      },
+      {
+        "num": 3,
+        "type": "year-based",
+        "question": "The Index of Industrial Production (IIP) has undergone several base year revisions. What is the correct chronological sequence of IIP base years used in India?",
+        "options": {
+          "a": "1980-81 → 1993-94 → 2004-05 → 2011-12",
+          "b": "1993-94 → 2004-05 → 2011-12 → 2022-23",
+          "c": "1990-91 → 2000-01 → 2011-12 → 2022-23",
+          "d": "1993-94 → 2000-01 → 2011-12 → 2022-23"
+        },
+        "correct": "b",
+        "difficulty": "medium",
+        "syllabus_topic": "Indian Economy > Index of Industrial Production",
+        "news_topic": "IIP Base Year Revision 2022-23",
+        "explanation": "The correct sequence of IIP base years is 1993-94, then 2004-05, then 2011-12, and now 2022-23 (effective June 2026). MoSPI publishes IIP monthly. Each revision updates the basket of goods and sector weights to reflect the current industrial structure. There was no 1980-81 or 1990-91 base year in IIP's modern history."
+      },
+      {
+        "num": 4,
+        "type": "direct-recall",
+        "question": "The Index of Industrial Production (IIP) is published by —",
+        "options": {
+          "a": "Reserve Bank of India (RBI)",
+          "b": "NITI Aayog",
+          "c": "Ministry of Statistics and Programme Implementation (MoSPI)",
+          "d": "Ministry of Commerce and Industry"
+        },
+        "correct": "c",
+        "difficulty": "easy",
+        "syllabus_topic": "Indian Economy > Macroeconomics",
+        "news_topic": "IIP Base Year Revision 2022-23",
+        "explanation": "IIP is published monthly by the Ministry of Statistics and Programme Implementation (MoSPI), formerly the Central Statistics Office (CSO). It measures the quantum of industrial output across Mining, Manufacturing, and Electricity sectors. RBI uses it for monetary policy decisions but does not publish it. Manufacturing carries the highest weight of approximately 77%."
+      },
+      {
+        "num": 5,
+        "type": "which-is-not",
+        "question": "Which of the following is NOT a feature of the National Sports Governance Act, 2025?",
+        "options": {
+          "a": "It establishes the National Sports Board (NSB) as the apex regulatory body for sports federations",
+          "b": "It establishes the National Sports Tribunal (NST) as a quasi-judicial body for sports disputes",
+          "c": "It applies to National Sports Federations that receive government grants or recognition",
+          "d": "It makes the Sports Authority of India (SAI) the sole implementing body for all provisions"
+        },
+        "correct": "d",
+        "difficulty": "medium",
+        "syllabus_topic": "Indian Polity & Constitution > Legislation & Rules",
+        "news_topic": "National Sports Governance Act 2025",
+        "explanation": "The National Sports Governance Act 2025 creates two distinct bodies — NSB (regulatory oversight) and NST (quasi-judicial dispute resolution) — both under the Ministry of Youth Affairs and Sports. It applies to NSFs receiving government grants or recognition. The Sports Authority of India (SAI) is a separate body for sports infrastructure and training; it is not the sole implementing body under this Act. The Act is India's first comprehensive sports governance legislation."
+      },
+      {
+        "num": 6,
+        "type": "statement-based",
+        "question": "Consider the following statements about the High-Level Committee on Demographic Change constituted by the Government of India:\n1. It is chaired by the Prime Minister of India.\n2. It is a statutory body constituted under a specific Act of Parliament.\n3. Its mandate includes studying demographic changes arising from illegal immigration.\nWhich of the statements given above is/are correct?",
+        "options": {
+          "a": "1 and 3 only",
+          "b": "2 and 3 only",
+          "c": "1 only",
+          "d": "1, 2 and 3"
+        },
+        "correct": "a",
+        "difficulty": "medium",
+        "syllabus_topic": "Indian Polity & Constitution > Constitutional Bodies & Committees",
+        "news_topic": "High-Level Committee on Demographic Change",
+        "explanation": "Statement 1 is correct: The Committee is chaired by the Prime Minister of India. Statement 2 is incorrect: It is NOT a statutory body — it is constituted under the executive power of the Union (Article 73 of the Constitution), not by any Act of Parliament. Statement 3 is correct: Its mandate specifically covers studying demographic changes caused by illegal immigration and recommending measures to address them."
+      },
+      {
+        "num": 7,
+        "type": "match-following",
+        "question": "Match the following bodies under the National Sports Governance Act 2025 with their primary functions:\nList-I (Body)\nA. National Sports Board (NSB)\nB. National Sports Tribunal (NST)\nC. National Sports Federations (NSFs)\nList-II (Function)\ni. Quasi-judicial adjudication of sports disputes\nii. Governing bodies for individual sports, subject to oversight\niii. Apex regulatory oversight of sports federation governance\nSelect the correct answer using the codes below:",
+        "options": {
+          "a": "A-i, B-iii, C-ii",
+          "b": "A-iii, B-i, C-ii",
+          "c": "A-iii, B-ii, C-i",
+          "d": "A-ii, B-i, C-iii"
+        },
+        "correct": "b",
+        "difficulty": "hard",
+        "syllabus_topic": "Indian Polity & Constitution > Legislation & Rules",
+        "news_topic": "National Sports Governance Act 2025",
+        "explanation": "The correct match is: A-iii (NSB is the apex regulatory and oversight body that monitors sports federation governance, elections, and transparency), B-i (NST is the quasi-judicial tribunal that adjudicates disputes related to sports governance), C-ii (NSFs are the individual sports governing bodies — like Hockey India, BCCI for

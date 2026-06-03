@@ -1,0 +1,90 @@
+[
+  {
+    "q_no": 1,
+    "question": "High-Level Committee on Demographic Change, constituted by the Government of India in 2026, is chaired by which of the following?",
+    "option_a": "Home Minister of India",
+    "option_b": "Chief Justice of India",
+    "option_c": "Prime Minister of India",
+    "option_d": "Vice President of India",
+    "correct": "c",
+    "explanation": "The High-Level Committee on Demographic Change is chaired by the Prime Minister of India, making it the highest-level executive committee on demographic issues. It is constituted under the executive power of the Union under Article 73 of the Constitution and is neither a constitutional nor a statutory body.",
+    "subject": "Indian Polity & Constitution"
+  },
+  {
+    "q_no": 2,
+    "question": "The High-Level Committee on Demographic Change is constituted under which Article of the Indian Constitution?",
+    "option_a": "Article 53",
+    "option_b": "Article 73",
+    "option_c": "Article 245",
+    "option_d": "Article 263",
+    "correct": "b",
+    "explanation": "The Committee is constituted under Article 73 of the Constitution, which defines the extent of executive power of the Union. It is an executive committee, not a constitutional or statutory body. Article 53 deals with executive power vested in the President, Article 245 deals with extent of laws made by Parliament, and Article 263 deals with Inter-State Councils.",
+    "subject": "Indian Polity & Constitution"
+  },
+  {
+    "q_no": 3,
+    "question": "Under the National Sports Governance Act 2025, which body is empowered to adjudicate sports-related disputes in India?",
+    "option_a": "National Sports Board (NSB)",
+    "option_b": "Sports Authority of India (SAI)",
+    "option_c": "National Sports Tribunal (NST)",
+    "option_d": "Indian Olympic Association (IOA)",
+    "correct": "c",
+    "explanation": "The National Sports Governance Act 2025 creates two distinct bodies: the National Sports Board (NSB), which is the apex regulatory and oversight body for sports federations, and the National Sports Tribunal (NST), which is a quasi-judicial body empowered to adjudicate sports-related disputes. NSB governs; NST adjudicates.",
+    "subject": "Indian Polity & Constitution"
+  },
+  {
+    "q_no": 4,
+    "question": "The National Sports Governance Act 2025 primarily applies to which of the following?",
+    "option_a": "State Sports Academies receiving Central grants",
+    "option_b": "National Sports Federations receiving government grants or recognition",
+    "option_c": "Private sports clubs with international affiliations",
+    "option_d": "All sporting bodies registered under the Companies Act",
+    "correct": "b",
+    "explanation": "The National Sports Governance Act 2025 applies to National Sports Federations (NSFs) that receive government grants or recognition. It is India's first comprehensive legislation to regulate governance of national sports federations and was enacted as India's legislative response to the International Olympic Committee's demand for clean sports governance.",
+    "subject": "Indian Polity & Constitution"
+  },
+  {
+    "q_no": 5,
+    "question": "MoSPI announced the revision of the IIP base year to 2022-23 in 2026. What was the immediately preceding base year of IIP?",
+    "option_a": "2004-05",
+    "option_b": "2007-08",
+    "option_c": "2011-12",
+    "option_d": "2017-18",
+    "correct": "c",
+    "explanation": "The base year history of IIP is: 1993-94 → 2004-05 → 2011-12 → 2022-23 (effective June 2026). The immediately preceding base year before the 2026 revision was 2011-12. Each revision updates the basket of goods and weights to reflect the current industrial structure.",
+    "subject": "Indian Economy"
+  },
+  {
+    "q_no": 6,
+    "question": "In the IIP series, approximately what percentage weight does the Manufacturing sector carry?",
+    "option_a": "55%",
+    "option_b": "65%",
+    "option_c": "77%",
+    "option_d": "85%",
+    "correct": "c",
+    "explanation": "In the IIP series, Manufacturing continues to carry the highest weight at approximately 77%, followed by Mining and Electricity sectors. IIP is published monthly by MoSPI and is a key high-frequency indicator used by RBI for monetary policy decisions.",
+    "subject": "Indian Economy"
+  },
+  {
+    "q_no": 7,
+    "question": "PM-WANI framework was launched by the Department of Telecommunications (DoT) in which year?",
+    "option_a": "December 2018",
+    "option_b": "March 2019",
+    "option_c": "December 2020",
+    "option_d": "January 2022",
+    "correct": "c",
+    "explanation": "PM-WANI (Prime Minister Wi-Fi Access Network Interface) was launched by the Department of Telecommunications (DoT) in December 2020 to create a decentralised public Wi-Fi ecosystem across India. No licence fee is required to become a PDO (Public Data Office) under this framework.",
+    "subject": "Science & Technology"
+  },
+  {
+    "q_no": 8,
+    "question": "In the PM-WANI framework, which entity is responsible for authenticating users accessing public Wi-Fi hotspots?",
+    "option_a": "Public Data Office (PDO)",
+    "option_b": "Public Data Office Aggregator (PDOA)",
+    "option_c": "App Provider",
+    "option_d": "Department of Telecommunications (DoT)",
+    "correct": "c",
+    "explanation": "The PM-WANI framework operates through three entities: PDO (Public Data Office) provides the local Wi-Fi hotspot, PDOA (Public Data Office Aggregator) manages multiple PDOs, and the App Provider authenticates users. After 2026 reforms, users can connect without downloading a separate app or completing fresh registration each time.",
+    "subject": "Science & Technology"
+  }
+]

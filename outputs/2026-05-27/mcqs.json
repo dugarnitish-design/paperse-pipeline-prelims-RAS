@@ -1,0 +1,90 @@
+[
+  {
+    "q_no": 1,
+    "question": "Union Home Minister chaired a border security review meeting in Bikaner in May 2025. Which of the following correctly states the length of Indo-Pakistan border that Rajasthan shares?",
+    "option_a": "820 km",
+    "option_b": "1,037 km",
+    "option_c": "1,179 km",
+    "option_d": "965 km",
+    "correct": "b",
+    "explanation": "Rajasthan shares approximately 1,037 km of the Indo-Pakistan International Border, making it the longest border-sharing state with Pakistan among all Indian states. The border passes through Sri Ganganagar, Bikaner, Jaisalmer, and Barmer districts.",
+    "subject": "Rajasthan Polity & Administration"
+  },
+  {
+    "q_no": 2,
+    "question": "The Border Area Development Programme (BADP), which covers the four Pakistan-border districts of Rajasthan, is funded by the Central Government in what proportion?",
+    "option_a": "60% Centre, 40% State",
+    "option_b": "75% Centre, 25% State",
+    "option_c": "90% Centre, 10% State",
+    "option_d": "100% by the Centre",
+    "correct": "d",
+    "explanation": "The Border Area Development Programme (BADP) is funded 100% by the Central Government under the Ministry of Home Affairs. It covers the four border districts of Rajasthan — Sri Ganganagar, Bikaner, Jaisalmer, and Barmer.",
+    "subject": "Rajasthan Economy"
+  },
+  {
+    "q_no": 3,
+    "question": "The recently approved SARTHAK-PDS umbrella scheme is nodal to which Union Ministry?",
+    "option_a": "Ministry of Agriculture and Farmers Welfare",
+    "option_b": "Ministry of Rural Development",
+    "option_c": "Ministry of Consumer Affairs, Food and Public Distribution",
+    "option_d": "Ministry of Finance",
+    "correct": "c",
+    "explanation": "SARTHAK-PDS is an umbrella scheme approved by the Cabinet Committee on Economic Affairs under the Ministry of Consumer Affairs, Food and Public Distribution. It integrates food grain transport assistance with SMART PDS automation.",
+    "subject": "Indian Economy"
+  },
+  {
+    "q_no": 4,
+    "question": "Under the National Food Security Act, 2013, what percentage of the rural population is legally entitled to receive subsidised food grains?",
+    "option_a": "50%",
+    "option_b": "67%",
+    "option_c": "75%",
+    "option_d": "80%",
+    "correct": "c",
+    "explanation": "The National Food Security Act, 2013 legally entitles up to 75% of the rural population and 50% of the urban population to receive subsidised food grains at ₹3/kg (rice), ₹2/kg (wheat), and ₹1/kg (coarse grains). SARTHAK-PDS operates within this framework.",
+    "subject": "Indian Polity & Constitution"
+  },
+  {
+    "q_no": 5,
+    "question": "India's first indigenous Hydrogen Fuel Cell Train has been approved for which railway section?",
+    "option_a": "Rewari–Rohtak section of Northern Railway",
+    "option_b": "Jind–Sonipat section of Northern Railway",
+    "option_c": "Ambala–Ludhiana section of Northern Railway",
+    "option_d": "Delhi–Panipat section of Northern Railway",
+    "correct": "b",
+    "explanation": "India's first indigenous Hydrogen Fuel Cell (HFC) trainset was approved for the Jind–Sonipat section under the Northern Railway zone. It generates electricity through an electrochemical reaction between hydrogen and oxygen, emitting only water vapour.",
+    "subject": "Science & Technology"
+  },
+  {
+    "q_no": 6,
+    "question": "Which of the following is the only direct emission produced by a Hydrogen Fuel Cell train during its operation?",
+    "option_a": "Carbon dioxide",
+    "option_b": "Nitrogen oxide",
+    "option_c": "Water vapour",
+    "option_d": "Hydrogen peroxide",
+    "correct": "c",
+    "explanation": "A hydrogen fuel cell generates electricity through an electrochemical reaction between hydrogen and oxygen. The only direct emission produced during this process is water vapour, making HFC trains a zero-direct-emission technology.",
+    "subject": "Science & Technology"
+  },
+  {
+    "q_no": 7,
+    "question": "The National Health Accounts Estimates for India 2022-23, released by the Union Health Ministry, uses which internationally standardised framework as its basis?",
+    "option_a": "System of Health Accounts (SHA) 2011 developed by WHO, OECD, and Eurostat",
+    "option_b": "Global Health Expenditure Database (GHED) framework of WHO",
+    "option_c": "National Health Mission Accounting Standards developed by MoHFW",
+    "option_d": "Universal Health Coverage Index framework of the United Nations",
+    "correct": "a",
+    "explanation": "The National Health Accounts Estimates for India are prepared using the System of Health Accounts (SHA) 2011 framework, jointly developed by the World Health Organization (WHO), the Organisation for Economic Co-operation and Development (OECD), and Eurostat.",
+    "subject": "Indian Economy"
+  },
+  {
+    "q_no": 8,
+    "question": "The National Health Policy 2017 set a target for Government Health Expenditure as a percentage of GDP to be achieved by 2025. What is this target?",
+    "option_a": "1.5% of GDP",
+    "option_b": "2.0% of GDP",
+    "option_c": "2.5% of GDP",
+    "option_d": "3.0% of GDP",
+    "correct": "c",
+    "explanation": "The National Health Policy 2017 set a target of raising Government Health Expenditure (GHE) to 2.5% of GDP by the year 2025. The National Health Accounts Estimates for India 2022-23, released by the Union Health Ministry, are assessed against this benchmark.",
+    "subject": "Indian Economy"
+  }
+]

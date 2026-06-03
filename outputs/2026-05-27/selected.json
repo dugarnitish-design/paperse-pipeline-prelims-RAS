@@ -1,0 +1,54 @@
+[
+  {
+    "source": "PIB",
+    "ref": "PIB-7",
+    "title": "Cabinet approves SARTHAK-PDS umbrella scheme integrating food grain transport assistance and SMART PDS",
+    "subject": "National Schemes — Central Government",
+    "chapter": "Indian Economy",
+    "topic": "Food Security, PDS Modernization, NFSA",
+    "syllabus_topic": "Current Affairs — National",
+    "pyq_pattern": "direct-recall",
+    "is_rajasthan": false,
+    "priority": "high",
+    "content_snippet": "The Cabinet Committee on Economic Affairs (CCEA) chaired by the Prime Minister Shri Narendra Modi has approved the continuation of the 'Scheme for Assistance in Ration Transport and Handling-Income with Automation in PDS' (SARTHAK PDS) as an umbrella scheme, in the 16th Finance Commission cycle awar"
+  },
+  {
+    "source": "PIB",
+    "ref": "PIB-33",
+    "title": "India's first Indigenous Hydrogen Fuel Cell Train approved for Jind-Sonipat section of Northern Railway",
+    "subject": "Science & Technology",
+    "chapter": "Science & Technology",
+    "topic": "Green Technology, Indigenous Transport Innovation, Indian Railways",
+    "syllabus_topic": "Science & Technology",
+    "pyq_pattern": "direct-recall",
+    "is_rajasthan": false,
+    "priority": "high",
+    "content_snippet": "In a major step towards green and sustainable transportation, Indian Railways has approved the introduction of a 10-car Hydrogen Fuel Cell-based trainset on the dedicated Jind-Sonipat section of Northern Railway. The trainset is all set to start soon and will operate at a maximum speed of 75 kmph, p"
+  },
+  {
+    "source": "PIB",
+    "ref": "PIB-27",
+    "title": "Union Health Ministry releases National Health Accounts Estimates for India 2022-23",
+    "subject": "Indian Economy",
+    "chapter": "Economic Concepts and Indian Economy",
+    "topic": "Health Expenditure, Human Development, Social Sector Spending",
+    "syllabus_topic": "Current Affairs — National",
+    "pyq_pattern": "statement-based",
+    "is_rajasthan": false,
+    "priority": "medium",
+    "content_snippet": "The Union Health Ministry released the National Health Accounts (NHA) estimates for India 2022-23. The NHA 2022–23 is the tenth report on health expenditure estimates prepared by the National Health Accounts Technical Secretariat (NHATS), National Health Systems Resource Centre, Ministry of Health a"
+  },
+  {
+    "source": "PIB",
+    "ref": "PIB-28",
+    "title": "Union Home Minister Amit Shah chairs border security review meeting in Bikaner, Rajasthan",
+    "subject": "Current Affairs",
+    "chapter": "Political & Administrative System of Rajasthan",
+    "topic": "Border Security, Indo-Pakistan Border, Rajasthan Border Districts",
+    "syllabus_topic": "Current Affairs — Rajasthan",
+    "pyq_pattern": "direct-recall",
+    "is_rajasthan": true,
+    "priority": "high",
+    "content_snippet": "Union Home Minister and Minis"
+  }
+]

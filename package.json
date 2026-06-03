@@ -1,0 +1,17 @@
+{
+  "name": "paperse-pipeline",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test-pib": "node test-pib.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.98.0",
+    "@supabase/supabase-js": "^2.106.2",
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.0.0",
+    "nodemailer": "^8.0.9",
+    "pdf-parse": "^1.1.1"
+  }
+}

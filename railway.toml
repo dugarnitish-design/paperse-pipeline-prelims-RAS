@@ -1,0 +1,8 @@
+[build]
+builder = "nixpacks"
+buildCommand = "pip install -r requirements.txt"
+
+[deploy]
+startCommand = "./pipelines/run_daily.sh"
+restartPolicyType = "never"
+restartPolicyMaxRetries = 0

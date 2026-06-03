@@ -1,0 +1,64 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PaperSe — Claude Processor Test
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+→ Fetching PIB article list...
+→ Target date: 27/5/2026
+→ Checking sujas-input folder for PDF...
+→ Found: Sujas (26:05:2026).pdf (7816.3 KB)
+→ Converting PDF pages to images for OCR...
+→ Converted 4 pages. Running Claude Vision OCR...
+  → OCR page 1/4...
+→ Found 7 articles on PIB
+  Fetching PRID 2265715... ✓ "Prime Minister urges citizens to take precautions amid soari"
+  Fetching PRID 2265686... ✓ "Prime Minister shares Sanskrit Subhashitam highlighting the "
+  Fetching PRID 2265685... ✓ "Prime Minister pays homage to former Prime Minister Pandit J"
+  Fetching PRID 2265716... ✓ "Kolkata to Host International Day of Yoga 2026 Main Event; T"
+  Fetching PRID 2265711... ✓ "Union Minister of State for Coal and Mines Shri Satish Chand"
+  Fetching PRID 2265710... ✓ "Union Minister Of Commerce And Industry Shri Piyush Goyal An"
+  Fetching PRID 2265719... ✓ "Water Governance in Rural India"
+
+→ Successfully fetched 7 PIB articles
+
+  → OCR page 2/4...
+  → OCR page 3/4...
+  → OCR page 4/4...
+→ OCR complete. Extracted 10873 characters from 4 pages
+
+→ Step 1: Filtering and selecting items with Claude...
+→ Selected 2 items (discarded 6)
+  ✓ [PIB] Current Affairs — Kolkata to Host International Day of Yoga 2026 Main Event; T
+  ✓ [SUJAS] Current Affairs — BSF's Role in Operation Sindoor; Sanchu Post Bikaner — Histo
+→ Step 2: Fetching relevant PYQs from Supabase...
+→ Fetched 6 relevant PYQs from 1 subjects
+
+→ Step 3: Generating English + Hindi content with Claude...
+→ Content generated successfully
+
+→ Step 4: Fact-checking with Claude...
+→ Verification done: 9 uncertain, 2 corrected
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✓ PIB articles fetched: 7
+✓ SUJAS available: true
+✓ Items selected: 2
+✓ Items discarded: 6
+✓ PYQs used: 6
+✓ Output saved: ./outputs/2026-05-27/raw-output.txt
+
+--- FIRST 800 CHARS OF OUTPUT ---
+
+I'll systematically verify each fact in the content.
+
+**Key verifications:**
+- BSF raised 1 December 1965 ✓
+- UNGA Resolution for Yoga Day: The resolution number was **69/131** — checking: the actual resolution is **69/131** ✓ (adopted 11 December 2014 ✓)
+- Operation Sindoor: May 2025 — this was actually **May 2026** (the operation occurred in May 2026, not 2025, given the content date is 27 May 2026 and it's described as recent)
+- IDY 2025 host: Visakhapatnam [VERIFY] — already marked
+- IDY 2023 main event at UN HQ New York ✓
+- IDY 2024 Srinagar ✓
+- Prataprao Jadhav as MoS Ayush (IC) [VERIFY] — he was appointed but his exact portfolio needs verification
+- Ministry of AYUSH full form ✓
+- The "Sanchu" post in Bikaner — [VERIFY] as this specific post name is difficult to independently confir

@@ -1,0 +1,212 @@
+"""
+PaperSe Daily CA Pipeline — shared helpers.
+Loads env, exposes Supabase REST helpers, Claude client, ChromaDB collection,
+and shared config (paths, model, category emojis).
+
+SKIPS everything mains-related.
+"""
+import os, json, datetime, pathlib, functools
+import requests
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
+ROOT        = pathlib.Path(__file__).resolve().parent.parent          # paperse-pipeline/
+INPUTS      = ROOT / "inputs"
+IE_DIR      = INPUTS / "ie-pdf"
+SUJAS_DIR   = INPUTS / "sujas"
+UPLOADS     = ROOT / "uploads"
+OUT_EN      = ROOT / "outputs" / "daily-ca" / "EN"
+OUT_HI      = ROOT / "outputs" / "daily-ca" / "HI"
+for _d in (IE_DIR, SUJAS_DIR, UPLOADS, OUT_EN, OUT_HI):
+    _d.mkdir(parents=True, exist_ok=True)
+
+# ── Env ───────────────────────────────────────────────────────────────────────
+def _load_env():
+    env = {}
+    envpath = ROOT / ".env"
+    if envpath.exists():
+        for line in envpath.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            env[k.strip()] = v.strip().strip('"').strip("'")
+    return env
+
+ENV          = _load_env()
+SUPABASE_URL = ENV.get("SUPABASE_URL", "https://nunbpwaxqqgfxrosqfhw.supabase.co").rstrip("/")
+SERVICE_KEY  = ENV.get("SUPABASE_SERVICE_KEY")
+ANTHROPIC_KEY = ENV.get("ANTHROPIC_API_KEY")
+
+# ── Config ────────────────────────────────────────────────────────────────────
+CLAUDE_MODEL     = "claude-sonnet-4-20250514"   # per spec
+EMBED_MODEL      = "paraphrase-multilingual-MiniLM-L12-v2"
+# NOTE: spec says collection 'paperse_prelims_pyq'; the actual built collection
+# is 'prelims_questions' (899 PYQs). We use the real one, with fallback.
+CHROMA_PATH      = ROOT / "chroma_db"
+CHROMA_COLLECTION_CANDIDATES = ["paperse_prelims_pyq", "prelims_questions"]
+
+CATEGORY_EMOJI = {
+    "sports": "🏆", "national sports & awards": "🏆", "global sports & awards": "🏆",
+    "books": "📖", "books, awards & personalities": "📖", "books & personalities": "📖",
+    "national": "🇮🇳", "national politics & governance": "🇮🇳", "bills & legislation": "📜",
+    "international": "🌍", "international politics & elections": "🌍",
+    "international organisations & reports": "🌍", "global": "🌍",
+    "rajasthan": "🗺️", "science": "🔬", "science & technology": "🔬",
+    "national science & technology": "🔬",
+}
+
+def emoji_for(category: str) -> str:
+    if not category:
+        return "📰"
+    c = category.lower()
+    if c in CATEGORY_EMOJI:
+        return CATEGORY_EMOJI[c]
+    for key, em in CATEGORY_EMOJI.items():
+        if key in c:
+            return em
+    if "rajasthan" in c: return "🗺️"
+    if "sport" in c:     return "🏆"
+    if "book" in c or "award" in c or "personalit" in c: return "📖"
+    if "internationa" in c or "global" in c: return "🌍"
+    if "scien" in c or "tech" in c: return "🔬"
+    if "bill" in c or "legisl" in c or "act" in c: return "📜"
+    return "🇮🇳"
+
+# ── Supabase REST helpers (service role) ──────────────────────────────────────
+def _headers(extra=None):
+    h = {"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}",
+         "Content-Type": "application/json"}
+    if extra:
+        h.update(extra)
+    return h
+
+def sb_select(table, select="*", params=None):
+    p = {"select": select}
+    if params:
+        p.update(params)
+    r = requests.get(f"{SUPABASE_URL}/rest/v1/{table}", params=p, headers=_headers())
+    r.raise_for_status()
+    return r.json()
+
+def sb_count(table, params=None):
+    p = {"select": "*"}
+    if params:
+        p.update(params)
+    r = requests.get(f"{SUPABASE_URL}/rest/v1/{table}", params=p,
+                     headers=_headers({"Prefer": "count=exact", "Range": "0-0"}))
+    cr = r.headers.get("content-range", "0-0/0")
+    return int(cr.split("/")[-1])
+
+def sb_insert(table, rows, returning=True):
+    if isinstance(rows, dict):
+        rows = [rows]
+    prefer = "return=representation" if returning else "return=minimal"
+    r = requests.post(f"{SUPABASE_URL}/rest/v1/{table}",
+                      headers=_headers({"Prefer": prefer}), data=json.dumps(rows))
+    if r.status_code not in (200, 201, 204):
+        raise RuntimeError(f"insert {table} failed [{r.status_code}]: {r.text[:300]}")
+    return r.json() if (returning and r.text) else None
+
+def sb_upsert(table, rows, on_conflict, returning=False):
+    if isinstance(rows, dict):
+        rows = [rows]
+    prefer = "resolution=merge-duplicates," + ("return=representation" if returning else "return=minimal")
+    r = requests.post(f"{SUPABASE_URL}/rest/v1/{table}?on_conflict={on_conflict}",
+                      headers=_headers({"Prefer": prefer}), data=json.dumps(rows))
+    if r.status_code not in (200, 201, 204):
+        raise RuntimeError(f"upsert {table} failed [{r.status_code}]: {r.text[:300]}")
+    return r.json() if (returning and r.text) else None
+
+def sb_update(table, patch, match):
+    params = {k: f"eq.{v}" for k, v in match.items()}
+    r = requests.patch(f"{SUPABASE_URL}/rest/v1/{table}", params=params,
+                       headers=_headers({"Prefer": "return=representation"}),
+                       data=json.dumps(patch))
+    if r.status_code not in (200, 204):
+        raise RuntimeError(f"update {table} failed [{r.status_code}]: {r.text[:300]}")
+    return r.json() if r.text else None
+
+def sb_delete(table, match):
+    params = {k: f"eq.{v}" for k, v in match.items()}
+    r = requests.delete(f"{SUPABASE_URL}/rest/v1/{table}", params=params, headers=_headers())
+    if r.status_code not in (200, 204):
+        raise RuntimeError(f"delete {table} failed [{r.status_code}]: {r.text[:300]}")
+    return True
+
+# ── Claude ────────────────────────────────────────────────────────────────────
+@functools.lru_cache(maxsize=1)
+def claude():
+    import anthropic
+    return anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+
+def claude_json(system, user, max_tokens=1000, model=CLAUDE_MODEL):
+    """Call Claude and parse a JSON object from the reply (robust to fences)."""
+    msg = claude().messages.create(
+        model=model, max_tokens=max_tokens, system=system,
+        messages=[{"role": "user", "content": user}],
+    )
+    text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip()
+    return _parse_json(text), text
+
+def claude_text(system, user, max_tokens=1000, model=CLAUDE_MODEL):
+    msg = claude().messages.create(
+        model=model, max_tokens=max_tokens, system=system,
+        messages=[{"role": "user", "content": user}],
+    )
+    return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip()
+
+def _parse_json(text):
+    t = text.strip()
+    if t.startswith("```"):
+        t = t.split("```", 2)[1]
+        if t.startswith("json"):
+            t = t[4:]
+        t = t.strip()
+    # find first { ... last }
+    start, end = t.find("{"), t.rfind("}")
+    if start != -1 and end != -1:
+        t = t[start:end + 1]
+    return json.loads(t)
+
+# ── ChromaDB (lazy; heavy import) ─────────────────────────────────────────────
+@functools.lru_cache(maxsize=1)
+def chroma_collection():
+    import chromadb
+    client = chromadb.PersistentClient(path=str(CHROMA_PATH))
+    names = [c.name for c in client.list_collections()]
+    for cand in CHROMA_COLLECTION_CANDIDATES:
+        if cand in names:
+            return client.get_collection(cand)
+    raise RuntimeError(f"No prelims collection found. Have: {names}")
+
+@functools.lru_cache(maxsize=1)
+def embedder():
+    from sentence_transformers import SentenceTransformer
+    return SentenceTransformer(EMBED_MODEL)
+
+def pyq_lookup(text, n=3, max_distance=0.45):
+    """FILTER 5: has RPSC tested this before? Returns best match meta or None."""
+    try:
+        col = chroma_collection()
+        vec = embedder().encode([text]).tolist()
+        res = col.query(query_embeddings=vec, n_results=n,
+                        include=["metadatas", "distances", "documents"])
+        if not res["ids"] or not res["ids"][0]:
+            return None
+        dist = res["distances"][0][0]
+        if dist > max_distance:
+            return None
+        meta = res["metadatas"][0][0]
+        return {"distance": round(dist, 3), "score": round(1 - dist, 3),
+                "topic": meta.get("topic"), "subject": meta.get("subject"),
+                "year": meta.get("year"), "q_no": meta.get("q_no")}
+    except Exception as e:
+        print(f"   ⚠ pyq_lookup failed: {e}")
+        return None
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+def log(msg=""):
+    print(msg, flush=True)
+
+def parse_date(s):
+    return datetime.date.fromisoformat(s)
