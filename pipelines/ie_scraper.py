@@ -35,6 +35,7 @@ NOTE ON LOGIN
 import sys
 import json
 import time
+import html
 import datetime
 import pathlib
 
@@ -59,9 +60,10 @@ UA = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 
-# How many listing pages to walk per section before giving up (yesterday's
-# articles are near the top; we stop early once a page is entirely older).
-MAX_PAGES = 5
+# How many listing pages to walk per section before giving up. The stop-logic
+# (below) halts once we've paged past the target day, so this is just an upper
+# bound — set high enough to reach 2-day-old articles on a back-fill.
+MAX_PAGES = 10
 MIN_WORDS = 100
 REQUEST_GAP = 0.7   # politeness delay between requests (seconds)
 
@@ -92,7 +94,8 @@ SECTIONS = [
 # URL fragments that mark non-article content we never want.
 SKIP_URL_BITS = ("/photos/", "/photo-", "/videos/", "/video/", "/audio/",
                  "/podcast", "/gallery", "/lifestyle/", "/entertainment/",
-                 "/business/market", "/opinion/", "/technology/")
+                 "/business/market", "/opinion/", "/technology/",
+                 "/subscribe", "/profile/", "utm_source", "/web-stories/")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -289,6 +292,7 @@ def _paragraphs(ld, soup):
     fall back to the story body container."""
     body = ld.get("articleBody")
     if body and isinstance(body, str) and len(body.split()) >= MIN_WORDS:
+        body = html.unescape(body)
         parts = [p.strip() for p in body.split("\n") if p.strip()]
         if len(parts) < 2:  # articleBody sometimes has no newlines
             parts = [s.strip() + "." for s in body.split(". ") if s.strip()]
@@ -299,7 +303,7 @@ def _paragraphs(ld, soup):
         ps = soup.select(sel)
         if ps:
             for p in ps:
-                txt = " ".join(p.get_text(" ", strip=True).split())
+                txt = html.unescape(" ".join(p.get_text(" ", strip=True).split()))
                 if txt and not txt.lower().startswith(("also read", "read more")):
                     paras.append(txt)
             if paras:
@@ -319,7 +323,7 @@ def _parse_article(sess, url, section):
     if not title:
         og = soup.find("meta", property="og:title")
         title = og.get("content") if og else (soup.title.string if soup.title else "")
-    title = " ".join((title or "").split())
+    title = html.unescape(" ".join((title or "").split()))
     if not title:
         return None
 
@@ -392,29 +396,34 @@ def fetch_ie_articles(news_date, force=False):
             links = _article_links(soup)
             if not links:
                 break
-            page_had_target = False
+            page_had_target = False   # any article from the target day on this page
+            page_seen_older = False    # any article OLDER than the target day
             for url in links:
                 if url in seen_urls:
                     continue
-                # Cheap headline pre-filter is done after parse (need the title);
-                # parse first so we also get the published date.
+                # Parse first so we get the published date (listing pages aren't
+                # reliable for per-article timestamps).
                 art = _parse_article(sess, url, sec["name"])
                 time.sleep(REQUEST_GAP)
                 if not art:
                     continue
                 pub = art.pop("_pub_date", None)
-                if pub != news_date:
-                    # Older-than-target on a reverse-chron page → stop paging soon.
+                if pub is None:
                     continue
-                page_had_target = True
-                if not _headline_matches(art["title"], sec["filter"]):
-                    continue
-                seen_urls.add(url)
-                out.append(art)
-                kept_here += 1
-            # If this listing page yielded nothing from the target date, the
-            # rest are older — stop walking this section.
-            if not page_had_target and page > 1:
+                if pub == news_date:
+                    page_had_target = True
+                    if _headline_matches(art["title"], sec["filter"]):
+                        seen_urls.add(url)
+                        out.append(art)
+                        kept_here += 1
+                elif pub < news_date:
+                    page_seen_older = True
+                # pub > news_date (newer than target): skip, keep paging deeper.
+            # Stop once we've paged PAST the target day: this page had no
+            # target-date articles AND we've already crossed into older ones.
+            # Pages that are still newer-than-target don't stop the walk, so a
+            # 2-day-old backfill keeps going until it reaches the target.
+            if not page_had_target and page_seen_older:
                 break
         C.log(f"      · {sec['name']}: kept {kept_here}")
     C.log(f"   IE web scrape → {len(out)} articles for {news_date.isoformat()}")
