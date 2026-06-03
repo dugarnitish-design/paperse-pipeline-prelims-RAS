@@ -19,6 +19,7 @@ os.environ.setdefault("DYLD_FALLBACK_LIBRARY_PATH",
 import sys, html, datetime
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent))
 from pipelines import _common as C
+from pipelines import rag_integration as rag
 
 TEST_URL = "https://paperse.in/test/{date}"
 # NOTE: colour emoji (SBIX) don't render in WeasyPrint/cairo on this box (no B/W
@@ -76,6 +77,18 @@ def render_html(date, lang, main_items, also_items, labels):
     items_html = []
     for it in main_items:
         bullets = "".join(f"<li>{esc(b)}</li>" for b in (it.get("bullets") or []))
+
+        # Get RAG tags
+        tags = rag.get_pdf_tags(it)
+        tags_html = ""
+        if tags:
+            tag_items = "".join(
+                f'<span class="tag" style="background:{c}; color:white; padding:2px 6px; '
+                f'border-radius:3px; font-size:11px; margin-right:6px;">{esc(t)}</span>'
+                for t, c in [(tag['text'], tag['color']) for tag in tags]
+            )
+            tags_html = f'<div class="tags" style="margin-top:4px;">{tag_items}</div>'
+
         items_html.append(f"""
         <div class="item">
           <div class="cat"><span class="dot">&#9679;</span> {esc(it.get('category'))}</div>
@@ -84,6 +97,7 @@ def render_html(date, lang, main_items, also_items, labels):
           <div class="context">{esc(it.get('context'))}</div>
           <ul>{bullets}</ul>
           <div class="static">&#9656; {L['static']}: <b>{esc(it.get('static_connect'))}</b></div>
+          {tags_html}
         </div>""")
 
     also_html = ""

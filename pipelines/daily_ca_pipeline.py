@@ -14,6 +14,7 @@ from collections import defaultdict
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent))
 from pipelines import _common as C
+from pipelines import rag_integration as rag
 
 STOP = set("""a an the of to in on for and or with from this that these those is are was were be been
 as at by it its his her their our your into over under about after before only also more most than
@@ -346,6 +347,15 @@ def main(news_date, label_date):
         C.log("\n✗ No items passed filters. Slow news day / source mismatch.")
         return None
 
+    # 2.5. RAG ENRICHMENT (3-layer intelligence: ChromaDB PYQs + topic_kb)
+    C.log("\n[2.5] RAG ENRICHMENT (ChromaDB PYQs + topic_kb priorities)")
+    # Build ca_category_map for enrichment
+    ca_map = {i: item.get("category") for i, item in enumerate(approved)}
+    # Enrich with 3-layer RAG
+    approved = rag.enrich_ca_items(approved, ca_category_map=ca_map)
+    # Re-sort by final_priority_score (combining all layers)
+    approved.sort(key=lambda x: x.get("final_priority_score", x.get("priority", 0.5)), reverse=True)
+
     # 3. RANK + SELECT  (dedup by category for variety in the main 5)
     approved.sort(key=lambda x: x["priority"], reverse=True)
     main_items, seen_cat = [], set()
@@ -374,13 +384,27 @@ def main(news_date, label_date):
         hi = gen_main(it, "HI")
         base = dict(date=label_date.isoformat(), category=it["category"], tier=it["tier"],
                     source=it["source"], rajasthan_angle=it["rajasthan_angle"],
-                    priority=it["priority"], is_main=True)
+                    priority=it.get("final_priority_score", it.get("priority", 0.5)), is_main=True)
+
+        # Include RAG metadata (for PDF display and future analysis)
+        rag_meta = {
+            "pyq_match_year": it.get("pyq_match_year"),
+            "pyq_match_topic": it.get("pyq_match_topic"),
+            "pyq_similarity_score": it.get("pyq_similarity_score"),
+            "topic_kb_priority_score": it.get("topic_kb_priority_score"),
+            "topic_kb_frequency": it.get("topic_kb_frequency"),
+            "topic_kb_never_skipped": it.get("topic_kb_never_skipped"),
+            "topic_kb_trajectory": it.get("topic_kb_trajectory"),
+        }
+
         row_en = {**base, "language": "EN", "title": en.get("title"), "summary": en.get("summary"),
                   "context": en.get("context"), "bullets": en.get("bullets"),
-                  "static_connect": en.get("static_connect") or it.get("static_connect")}
+                  "static_connect": en.get("static_connect") or it.get("static_connect"),
+                  "rag_metadata": rag_meta}
         row_hi = {**base, "language": "HI", "title": hi.get("title"), "summary": hi.get("summary"),
                   "context": hi.get("context"), "bullets": hi.get("bullets"),
-                  "static_connect": hi.get("static_connect") or it.get("static_connect")}
+                  "static_connect": hi.get("static_connect") or it.get("static_connect"),
+                  "rag_metadata": rag_meta}
         ins = C.sb_insert("daily_ca_items", [row_en, row_hi])
         # keep the EN row id as canonical "source item" for MCQs
         en_id = next((r["id"] for r in ins if r["language"] == "EN"), ins[0]["id"])
