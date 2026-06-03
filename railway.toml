@@ -5,4 +5,4 @@ builder = "nixpacks"
 # SERVICE_MODE controls which service this is:
 #   curator  → runs Flask curator dashboard (ideal-compassion service)
 #   pipeline → runs daily CA pipeline (paperse-pipeline service, cron job)
-startCommand = "bash -c 'if [ \"$SERVICE_MODE\" = \"curator\" ]; then python3 pipelines/curator_server.py; else ./pipelines/run_daily.sh; fi'"
+startCommand = "bash -c 'if [ \"$SERVICE_MODE\" = \"curator\" ]; then python3 pipelines/curator_health_test.py; else ./pipelines/run_daily.sh; fi'"
