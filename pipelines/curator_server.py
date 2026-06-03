@@ -161,34 +161,53 @@ def approve_without_edits(date):
 @require_auth
 def publish_with_edits(date):
     """
-    Approve with custom selection (some items deselected, replacements added).
+    Approve with custom selection + optional edits + rejection reasons.
     Form fields:
-      selected_items[]  — indices of top-5 items to KEEP (from 0-4)
-      replacement_items[] — indices from items 5-7 to ADD
+      selected_items[]        — indices of top-5 items to KEEP (0-4)
+      replacement_items[]     — indices from items 5-7 to ADD
+      title_edit_N            — edited title for item N (if changed)
+      summary_edit_N          — edited summary for item N (if changed)
+      rejection_reason_N      — rejection reason for unchecked item N
     """
     draft = load_draft(date)
     if not draft:
         return jsonify({"error": "Draft not found"}), 404
 
     all_items = draft.get("items", [])
-
-    kept_idx   = [int(i) for i in request.form.getlist("selected_items")]
-    added_idx  = [int(i) for i in request.form.getlist("replacement_items")]
+    kept_idx  = [int(i) for i in request.form.getlist("selected_items")]
+    added_idx = [int(i) for i in request.form.getlist("replacement_items")]
 
     kept_items  = [all_items[i] for i in kept_idx if i < len(all_items)]
     added_items = [all_items[i] for i in added_idx if i < len(all_items)]
 
-    # Items that were in top-5 but NOT in kept_items → rejected
+    # Apply edits to kept items (update title/summary if changed)
+    edits_made = 0
+    for i, item in enumerate(all_items[:5]):
+        if i in kept_idx:
+            new_title   = request.form.get(f"title_edit_{i}", "").strip()
+            new_summary = request.form.get(f"summary_edit_{i}", "").strip()
+            orig_title   = (item.get("title") or item.get("title_en", "")).replace("**", "").strip()
+            orig_summary = (item.get("summary") or item.get("summary_en", "")).strip()
+            if new_title and new_title != orig_title:
+                item["title"] = new_title
+                edits_made += 1
+            if new_summary and new_summary != orig_summary:
+                item["summary"] = new_summary
+                edits_made += 1
+
+    # Rejected items → log with reason → RAG learns
     for i, item in enumerate(all_items[:5]):
         if i not in kept_idx:
+            reason = request.form.get(f"rejection_reason_{i}", "")
             learning.log_rejection(
                 item_title=item.get("title") or item.get("title_en", ""),
                 category=item.get("category", ""),
                 rejected_text=item.get("summary") or item.get("summary_en", ""),
                 topic=item.get("topic", ""),
+                rejection_reason=reason,
             )
 
-    # Items added from candidates → log as "replaced" (original removed)
+    # Candidates added → log replacement
     for item in added_items:
         learning.log_replacement(
             old_item_title="(candidate added)",
@@ -196,22 +215,21 @@ def publish_with_edits(date):
             category=item.get("category", ""),
         )
 
-    # Approve retained items
+    # Approve kept items
     for item in kept_items + added_items:
         learning.log_approval(
             item_title=item.get("title") or item.get("title_en", ""),
             category=item.get("category", ""),
         )
 
-    # Save final selection to draft
     final_indices = kept_idx + added_idx
     mark_draft_status(date, "approved", {
         "approved_at": datetime.datetime.utcnow().isoformat() + "Z",
         "approval_method": "dashboard_edited",
         "selected_indices": final_indices,
+        "edits_made": edits_made,
     })
 
-    # Publish
     ok = _publish(date)
     return jsonify({
         "status": "published" if ok else "error",
@@ -219,6 +237,7 @@ def publish_with_edits(date):
         "kept": len(kept_items),
         "added": len(added_items),
         "rejected": 5 - len(kept_items),
+        "edited": edits_made,
     }), 200 if ok else 500
 
 
