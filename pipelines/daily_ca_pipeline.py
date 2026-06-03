@@ -521,34 +521,35 @@ def curator_approval_workflow(date, top_5_items, next_3_items, items_with_scores
 # SOURCES
 # ─────────────────────────────────────────────────────────────────────────────
 def fetch_pib(date):
-    """Source 1 — PIB. Scrape Allrel.aspx, keep last-24h release titles."""
+    """Source 1 — PIB. Fetch releases for the specific date using the date-filter URL.
+    PIB publishes ~40-80 press releases per day. The unfiltered Allrel.aspx page is a
+    rolling list that mixes multiple dates; ?dtFromDate= gives exactly that day's releases."""
     items = []
     try:
         import requests
         from bs4 import BeautifulSoup
-        url = "https://pib.gov.in/Allrel.aspx?reg=3&lang=1"
+        date_str = date.strftime("%d-%m-%Y")   # PIB expects DD-MM-YYYY
+        url = (f"https://pib.gov.in/Allrel.aspx?reg=3&lang=1"
+               f"&dtFromDate={date_str}&dtToDate={date_str}")
         r = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0 PaperSe/1.0"})
         r.raise_for_status()
         soup = BeautifulSoup(r.text, "html.parser")
-        # PIB lists releases as <a> under content area; titles are link texts.
         seen = set()
-        for a in soup.select("a[href*='PressReleseDetail'], a[href*='PressReleasePage'], ul.num li a, .content-area a"):
+        SKIP = {"ministry", "department", "telephone", "tenders", "privacy",
+                "copyright", "policy", "hyperlink", "accessibility", "sitemap"}
+        for a in soup.find_all("a"):
             txt = " ".join(a.get_text(" ", strip=True).split())
-            if len(txt) < 25 or txt in seen:
+            if len(txt) < 30 or txt in seen:
+                continue
+            low = txt.lower()
+            if any(s in low for s in SKIP):
                 continue
             seen.add(txt)
             items.append({"source": "PIB", "title": txt, "text": txt, "url": url})
-        # Fallback: any reasonably long anchor text on the page
-        if not items:
-            for a in soup.find_all("a"):
-                txt = " ".join(a.get_text(" ", strip=True).split())
-                if len(txt) >= 40 and txt not in seen:
-                    seen.add(txt)
-                    items.append({"source": "PIB", "title": txt, "text": txt, "url": url})
-        C.log(f"   PIB: {len(items)} release titles (last listing)")
+        C.log(f"   PIB: {len(items)} releases for {date.isoformat()}")
     except Exception as e:
         C.log(f"   ⚠ PIB fetch failed: {e}")
-    return items[:120]
+    return items[:150]
 
 
 def _fitz_blocks(path):
