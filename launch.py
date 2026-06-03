@@ -14,13 +14,22 @@ print(f"Python={sys.version}")
 print(f"CWD={os.getcwd()}")
 
 if SERVICE_MODE == "curator":
-    print("Starting Curator Flask server...")
-    # Import and run Flask app directly (avoids subprocess PATH issues)
-    sys.path.insert(0, os.getcwd())
-    os.environ.setdefault("PORT", PORT)
-    import pipelines.curator_server as cs
-    cs.app.run(host="0.0.0.0", port=int(PORT), debug=False)
+    print("Starting Curator Flask server...", flush=True)
+    # Minimal inline Flask — verifies Python + Flask work before adding imports
+    from flask import Flask, jsonify, redirect, url_for
+    app = Flask(__name__)
+
+    @app.route("/health")
+    def health():
+        return jsonify({"status": "ok", "port": PORT, "service": "curator", "python": sys.version[:10]})
+
+    @app.route("/")
+    def index():
+        return redirect("/health")
+
+    print(f"Flask listening on 0.0.0.0:{PORT}", flush=True)
+    app.run(host="0.0.0.0", port=int(PORT), debug=False)
 else:
-    print("Starting Daily CA Pipeline...")
+    print("Starting Daily CA Pipeline...", flush=True)
     result = subprocess.run(["bash", "./pipelines/run_daily.sh"] + sys.argv[1:])
     sys.exit(result.returncode)
