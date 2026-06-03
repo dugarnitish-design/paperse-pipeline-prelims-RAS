@@ -21,7 +21,12 @@ for _d in (IE_DIR, SUJAS_DIR, UPLOADS, OUT_EN, OUT_HI):
 
 # ── Env ───────────────────────────────────────────────────────────────────────
 def _load_env():
+    """Load env vars from .env file first, then overlay with OS env vars.
+    OS env vars (Railway, shell exports) always take priority over .env file.
+    This makes the code work both locally (via .env) and on Railway (via OS env).
+    """
     env = {}
+    # 1. Load from .env file (local dev)
     envpath = ROOT / ".env"
     if envpath.exists():
         for line in envpath.read_text().splitlines():
@@ -29,7 +34,15 @@ def _load_env():
             if not line or line.startswith("#") or "=" not in line:
                 continue
             k, v = line.split("=", 1)
-            env[k.strip()] = v.strip().strip('"').strip("'")
+            k = k.strip()
+            v = v.strip().strip('"').strip("'")
+            if v:                       # skip blank placeholders
+                env[k] = v
+    # 2. Overlay with real OS environment variables (Railway injects these)
+    import os
+    for k, v in os.environ.items():
+        if v:
+            env[k] = v
     return env
 
 ENV          = _load_env()
