@@ -1,0 +1,4 @@
+# Lightweight requirements for curator Flask server only
+# (No chromadb/sentence-transformers/weasyprint needed)
+flask>=3.0.0
+requests>=2.31.0

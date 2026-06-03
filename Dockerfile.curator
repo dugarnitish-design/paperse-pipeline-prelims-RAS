@@ -1,0 +1,15 @@
+# Curator Flask server — lightweight Docker image
+# Uses official python:3.11-slim (python3 always in PATH, no nixpacks issues)
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install only what curator needs (fast build — no chromadb/weasyprint)
+COPY requirements_curator.txt .
+RUN pip install --no-cache-dir -r requirements_curator.txt
+
+# Copy full codebase (curator_server.py imports from pipelines/)
+COPY . .
+
+# python3 is always at /usr/local/bin/python3 in this image
+CMD ["python3", "launch.py"]
