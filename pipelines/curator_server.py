@@ -22,7 +22,7 @@ Routes:
 Setup:
   Add to .env:
     CURATOR_PASSWORD=your-secret-password
-    TELEGRAM_ADMIN_CHAT_ID=your-personal-telegram-id
+    CURATOR_CHAT_ID=your-personal-telegram-id
     CURATOR_DASHBOARD_URL=https://your-app.railway.app
     FLASK_SECRET_KEY=random-32-char-string
 """
@@ -54,7 +54,7 @@ app.secret_key = C.ENV.get("FLASK_SECRET_KEY", "dev-secret-key-change-in-prod")
 
 CURATOR_PASSWORD = C.ENV.get("CURATOR_PASSWORD", "")
 BOT_TOKEN        = C.ENV.get("TELEGRAM_BOT_TOKEN", "")
-ADMIN_CHAT_ID    = C.ENV.get("TELEGRAM_ADMIN_CHAT_ID", "")
+ADMIN_CHAT_ID    = C.ENV.get("CURATOR_CHAT_ID", "")
 
 learning = CuratorLearning()
 
@@ -141,7 +141,7 @@ def approve_without_edits(date):
     # Log approvals
     for item in items:
         learning.log_approval(
-            item_title=item.get("title_en") or item.get("title", ""),
+            item_title=item.get("title") or item.get("title_en", ""),
             category=item.get("category", ""),
         )
 
@@ -182,9 +182,9 @@ def publish_with_edits(date):
     for i, item in enumerate(all_items[:5]):
         if i not in kept_idx:
             learning.log_rejection(
-                item_title=item.get("title_en") or item.get("title", ""),
+                item_title=item.get("title") or item.get("title_en", ""),
                 category=item.get("category", ""),
-                rejected_text=item.get("summary_en") or item.get("summary", ""),
+                rejected_text=item.get("summary") or item.get("summary_en", ""),
                 topic=item.get("topic", ""),
             )
 
@@ -192,14 +192,14 @@ def publish_with_edits(date):
     for item in added_items:
         learning.log_replacement(
             old_item_title="(candidate added)",
-            new_item_title=item.get("title_en") or item.get("title", ""),
+            new_item_title=item.get("title") or item.get("title_en", ""),
             category=item.get("category", ""),
         )
 
     # Approve retained items
     for item in kept_items + added_items:
         learning.log_approval(
-            item_title=item.get("title_en") or item.get("title", ""),
+            item_title=item.get("title") or item.get("title_en", ""),
             category=item.get("category", ""),
         )
 
@@ -283,7 +283,7 @@ def _handle_callback(cq_id: str, cq_data: str, chat_id: str, msg_id):
         # Log approvals
         for item in (draft.get("items") or [])[:5]:
             learning.log_approval(
-                item_title=item.get("title_en") or item.get("title", ""),
+                item_title=item.get("title") or item.get("title_en", ""),
                 category=item.get("category", ""),
             )
 

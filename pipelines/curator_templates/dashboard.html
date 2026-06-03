@@ -147,11 +147,11 @@
                                data-idx="{{ loop.index0 }}"
                                checked>
                         <div class="item-body">
-                            <div class="item-title">{{ item.title_en or item.title or '(no title)' }}</div>
-                            <div class="item-summary">{{ item.summary_en or item.summary or '' }}</div>
+                            <div class="item-title">{{ (item.title or item.title_en or "(no title)") | replace("**", "") }}</div>
+                            <div class="item-summary">{{ item.summary or item.summary_en or "" }}</div>
                             <div class="item-tags">
                                 <span class="tag tag-score">
-                                    Score: {{ item.final_priority_score or item.score or '—' }}
+                                    Score: {{ item.priority or item.final_priority_score or "—" }}
                                 </span>
                                 <span class="tag tag-source">
                                     {{ item.source or 'Unknown' }}
@@ -186,11 +186,11 @@
                                    value="{{ 5 + loop.index0 }}"
                                    data-idx="{{ 5 + loop.index0 }}">
                             <div class="item-body">
-                                <div class="item-title">{{ item.title_en or item.title or '(no title)' }}</div>
-                                <div class="item-summary">{{ item.summary_en or item.summary or '' }}</div>
+                                <div class="item-title">{{ (item.title or item.title_en or "(no title)") | replace("**", "") }}</div>
+                                <div class="item-summary">{{ item.summary or item.summary_en or "" }}</div>
                                 <div class="item-tags">
                                     <span class="tag tag-score">
-                                        Score: {{ item.final_priority_score or item.score or '—' }}
+                                        Score: {{ item.priority or item.final_priority_score or "—" }}
                                     </span>
                                     <span class="tag tag-source">{{ item.source or 'Unknown' }}</span>
                                     {% if item.category %}

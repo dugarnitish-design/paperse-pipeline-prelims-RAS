@@ -19,7 +19,7 @@ def _bot_url(endpoint: str) -> str:
     return f"https://api.telegram.org/bot{token}/{endpoint}"
 
 def _admin_chat() -> str:
-    return C.ENV.get("TELEGRAM_ADMIN_CHAT_ID", "")
+    return C.ENV.get("CURATOR_CHAT_ID", "")
 
 
 # ── outbound ──────────────────────────────────────────────────────────────────
@@ -32,32 +32,34 @@ def send_approval_message(date_str: str, items: list) -> dict:
     """
     admin_chat = _admin_chat()
     if not admin_chat:
-        C.log("  ⚠ TELEGRAM_ADMIN_CHAT_ID not set — skipping approval message")
-        return {"error": "TELEGRAM_ADMIN_CHAT_ID not set"}
+        C.log("  ⚠ CURATOR_CHAT_ID not set — skipping approval message")
+        return {"error": "CURATOR_CHAT_ID not set"}
 
     dashboard_url = C.ENV.get(
         "CURATOR_DASHBOARD_URL",
         f"http://localhost:5000/curator/{date_str}"
     )
 
+    # Build HTML message (safe — no escaping headaches like MarkdownV2)
     lines = [
-        f"📋 *Daily CA Draft Ready — {date_str}*",
+        f"📋 <b>Daily CA Draft Ready — {date_str}</b>",
         f"",
-        f"Top 5 selected items:",
+        f"<b>Top 5 selected items:</b>",
     ]
     for i, item in enumerate(items[:5], 1):
-        title = (item.get("title_en") or item.get("title", "Untitled"))[:70]
-        score = item.get("final_priority_score") or item.get("score", "?")
+        title = (item.get("title") or item.get("title_en", "Untitled"))[:70]
+        title = title.replace("**", "").strip()           # strip markdown bold
+        score = item.get("priority") or item.get("final_priority_score", "?")
         source = item.get("source", "?")
-        lines.append(f"{i}\\. {title}")
-        lines.append(f"   Score: `{score}` | Source: {source}")
+        lines.append(f"{i}. {title}")
+        lines.append(f"   📊 Score: <code>{score}</code> | 📰 {source}")
 
     lines += [
         "",
-        f"Items 6\\-8 available on dashboard for replacement\\.",
-        f"⏰ Auto\\-publishes in 2 hours if no response\\.",
-        f"",
-        f"[Open Dashboard]({dashboard_url})",
+        "Items 6–8 available on dashboard for replacement.",
+        "⏰ Auto-publishes in 2 hours if no response.",
+        "",
+        f'🔗 <a href="{dashboard_url}">Open Dashboard</a>',
     ]
 
     keyboard = {
@@ -72,7 +74,7 @@ def send_approval_message(date_str: str, items: list) -> dict:
         json={
             "chat_id": admin_chat,
             "text": "\n".join(lines),
-            "parse_mode": "MarkdownV2",
+            "parse_mode": "HTML",
             "reply_markup": keyboard,
             "disable_web_page_preview": True,
         },
@@ -106,7 +108,8 @@ def notify_auto_published(date_str: str) -> None:
     send_simple_message(
         admin_chat,
         f"⏰ Auto-published {date_str} — no response in 2 hours.\n"
-        f"Log: curator_feedback (auto_published=true)"
+        f"Log: curator_feedback (auto_published=true)\n"
+        f"Top 5 items published as-is."
     )
 
 
