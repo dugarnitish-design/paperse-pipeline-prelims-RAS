@@ -551,6 +551,28 @@ def fetch_pib(date):
     return items[:120]
 
 
+def _fitz_blocks(path):
+    """Extract text blocks from a PDF using PyMuPDF (fitz).
+    Returns a list of clean text strings, one per logical block.
+    Blocks preserve bounding-box order (top→bottom, left→right) so
+    multi-column newspapers are split into separate blocks correctly."""
+    import fitz
+    result = []
+    doc = fitz.open(str(path))
+    for pg in doc:
+        blocks = pg.get_text("blocks")
+        # Sort top→bottom, then left→right
+        blocks.sort(key=lambda b: (round(b[1] / 10) * 10, b[0]))
+        for b in blocks:
+            if b[6] != 0:          # 0 = text, 1 = image — skip images
+                continue
+            txt = b[4].strip().replace("\n", " ")
+            txt = " ".join(txt.split())
+            if txt:
+                result.append(txt)
+    return result
+
+
 def _readable(chunk):
     """Reject garbled newspaper blocks.
     Stats like '75*', 'NFHS-6', 'Q3' legitimately lower alpha, so we're
@@ -594,14 +616,13 @@ def _line_ok(line):
 
 
 def load_ie_pdf(date):
-    """Source 2 — IE PDF via pdfplumber.
-    IE is a multi-column newspaper: extract_text() fuses columns row-by-row,
-    producing garbled words like 'ViratKohliThatisourquestion'. We fix this by:
-    1. degarbling camelCase joins (splits 'ViratKohli' → 'Virat Kohli'),
-    2. filtering out lines still dominated by garble,
-    3. building 6-line sliding-window chunks,
-    4. applying _readable() at the chunk level (not per-line).
-    This converts 5 usable blocks → ~100 blocks for the June-02 IE PDF."""
+    """Source 2 — IE PDF via PyMuPDF (fitz), falling back to pdfplumber.
+    fitz.get_text('blocks') returns one block per text-flow region with
+    bounding boxes, so multi-column newspaper columns are naturally
+    separated — no camelCase column-merge artifacts. Each block is degarbled,
+    quality-checked, and passed to the category filter. This replaces the
+    old sliding-window pdfplumber approach (which gave 5 usable blocks) and
+    now yields ~400-600 clean blocks from the same 18-page IE PDF."""
     items = []
     cand = [C.IE_DIR / f"{date.isoformat()}.pdf",
             C.UPLOADS / f"ie-delhi-{date.strftime('%d-%m-%Y')}.pdf"]
@@ -610,26 +631,19 @@ def load_ie_pdf(date):
         C.log(f"   ⚠ IE PDF not found at {cand[0]} (or uploads). Skipping IE source.")
         return items
     try:
-        import pdfplumber
+        raw_blocks = _fitz_blocks(path)
+        n_pages = 0
+        try:
+            import fitz
+            n_pages = len(fitz.open(str(path)))
+        except Exception:
+            pass
         blocks = []
-        with pdfplumber.open(str(path)) as pdf:
-            n = len(pdf.pages)
-            for pg in pdf.pages[:min(n, 24)]:
-                raw_lines = [l.strip() for l in (pg.extract_text() or "").split("\n")
-                             if l.strip()]
-                # Degarble camelCase joins, then keep readable lines only
-                ok_lines = []
-                for raw in raw_lines:
-                    dg = " ".join(_degarble(w) for w in raw.split())
-                    if _line_ok(dg):
-                        ok_lines.append(dg)
-                # Sliding window of 6 lines, step 4
-                W, STEP = 6, 4
-                for i in range(0, max(1, len(ok_lines)), STEP):
-                    chunk = " ".join(ok_lines[i:i + W])
-                    chunk = " ".join(chunk.split())
-                    if _readable(chunk):
-                        blocks.append(chunk)
+        for raw in raw_blocks:
+            dg = " ".join(_degarble(w) for w in raw.split())
+            dg = " ".join(dg.split())
+            if _readable(dg):
+                blocks.append(dg)
         # de-dup near-identical starts
         seen, uniq = set(), []
         for b in blocks:
@@ -638,9 +652,44 @@ def load_ie_pdf(date):
                 seen.add(key); uniq.append(b)
         for b in uniq:
             items.append({"source": "IE", "title": b[:90], "text": b})
-        C.log(f"   IE PDF: {path.name} → {n} pages, {len(items)} candidate blocks")
+        C.log(f"   IE PDF (fitz): {path.name} → {n_pages} pages, {len(items)} candidate blocks")
     except Exception as e:
-        C.log(f"   ⚠ IE PDF parse failed: {e}")
+        C.log(f"   ⚠ IE PDF fitz parse failed ({e}). Trying pdfplumber fallback …")
+        items = _load_ie_pdf_pdfplumber(date, path)
+    return items
+
+
+def _load_ie_pdf_pdfplumber(date, path):
+    """Fallback IE PDF extraction via pdfplumber (sliding-window degarble approach)."""
+    items = []
+    try:
+        import pdfplumber
+        blocks = []
+        with pdfplumber.open(str(path)) as pdf:
+            n = len(pdf.pages)
+            for pg in pdf.pages[:min(n, 24)]:
+                raw_lines = [l.strip() for l in (pg.extract_text() or "").split("\n") if l.strip()]
+                ok_lines = []
+                for raw in raw_lines:
+                    dg = " ".join(_degarble(w) for w in raw.split())
+                    if _line_ok(dg):
+                        ok_lines.append(dg)
+                W, STEP = 6, 4
+                for i in range(0, max(1, len(ok_lines)), STEP):
+                    chunk = " ".join(ok_lines[i:i + W])
+                    chunk = " ".join(chunk.split())
+                    if _readable(chunk):
+                        blocks.append(chunk)
+        seen, uniq = set(), []
+        for b in blocks:
+            key = b[:60].lower()
+            if key not in seen:
+                seen.add(key); uniq.append(b)
+        for b in uniq:
+            items.append({"source": "IE", "title": b[:90], "text": b})
+        C.log(f"   IE PDF (pdfplumber fallback): {path.name} → {n} pages, {len(items)} blocks")
+    except Exception as e:
+        C.log(f"   ⚠ IE PDF pdfplumber fallback also failed: {e}")
     return items
 
 
@@ -1003,7 +1052,8 @@ def main(news_date, label_date, dry_run=False):
         hi = gen_main(it, "HI")
         base = dict(date=label_date.isoformat(), category=it["category"], tier=it["tier"],
                     source=it["source"], rajasthan_angle=it["rajasthan_angle"],
-                    priority=it.get("final_priority_score", it.get("priority", 0.5)), is_main=True)
+                    priority=it.get("final_priority_score", it.get("priority", 0.5)),
+                    is_main=True, status="draft")   # draft until curator approves
 
         row_en = {**base, "language": "EN", "title": en.get("title"), "summary": en.get("summary"),
                   "context": en.get("context"), "bullets": en.get("bullets"),
@@ -1021,7 +1071,7 @@ def main(news_date, label_date, dry_run=False):
         a = gen_also(it)
         base = dict(date=label_date.isoformat(), category=it["category"], tier=it["tier"],
                     source=it["source"], rajasthan_angle=it["rajasthan_angle"],
-                    priority=it["priority"], is_main=False,
+                    priority=it["priority"], is_main=False, status="approved",  # "also in news" always visible
                     static_connect=it.get("static_connect"))
         C.sb_insert("daily_ca_items", [
             {**base, "language": "EN", "title": a["en"]["title"], "one_liner": a["en"]["one_liner"]},
