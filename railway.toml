@@ -5,4 +5,5 @@ builder = "nixpacks"
 # SERVICE_MODE controls which service this is:
 #   curator  → runs Flask curator dashboard (ideal-compassion service)
 #   pipeline → runs daily CA pipeline (paperse-pipeline service, cron job)
-startCommand = "python3 launch.py"
+# startCommand removed — nixpacks.toml [start] handles this with correct Python PATH
+# If startCommand is set here it overrides nixpacks PATH setup causing python3 not found

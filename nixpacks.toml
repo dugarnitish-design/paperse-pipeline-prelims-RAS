@@ -1,0 +1,6 @@
+# nixpacks configuration — lets nixpacks set up Python PATH correctly
+# railway.toml startCommand overrides nixpacks PATH setup (causing python3 not found)
+# Using nixpacks.toml [start] instead ensures Python is in PATH
+
+[start]
+cmd = "python3 launch.py"
