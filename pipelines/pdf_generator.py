@@ -42,7 +42,7 @@ body { font-family: 'Helvetica Neue', Arial, 'Noto Sans Devanagari', 'Kohinoor D
 .head h1 { font-size: 18pt; margin: 0; color: #11203a; font-weight: 800; }
 .head .sub { font-size: 9pt; color: #6b7280; margin-top: 2px; }
 .item { margin-bottom: 13px; padding-bottom: 11px; border-bottom: 1px solid #eceef2; }
-.cat { font-size: 8.2pt; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+.cat { font-size: 8.8pt; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
        color: #f4622a; }
 .cat .dot { color: #f4622a; font-size: 7pt; vertical-align: middle; }
 .title { font-size: 12pt; font-weight: 800; color: #11203a; margin: 2px 0 3px; }
@@ -52,8 +52,9 @@ ul { margin: 4px 0 5px 0; padding-left: 17px; }
 li { margin-bottom: 2px; }
 .static { font-size: 9pt; color: #2563eb; }
 .static b { color: #1e40af; }
-.also h2, .sec h2 { font-size: 10.5pt; color: #11203a; border-left: 4px solid #f4622a;
-                    padding-left: 7px; margin: 12px 0 6px; text-transform: uppercase; letter-spacing:.03em;}
+.also h2, .sec h2 { font-size: 11.5pt; font-weight: 900; color: #11203a;
+                    border-left: 4px solid #f4622a; padding-left: 7px;
+                    margin: 14px 0 7px; text-transform: uppercase; letter-spacing:.04em; }
 .also li { margin-bottom: 4px; }
 .also .t { font-weight: 700; }
 .connects { font-size: 9pt; color: #374151; background:#f8fafc; border:1px solid #e5e7eb;
@@ -74,10 +75,53 @@ a { color:#2563eb; }
 .pyqdiv { border:none; border-top:1px solid #e5e7eb; margin:8px 0; }
 """
 
+import re as _re
 def esc(s):
     return html.escape(str(s or ""))
 
+def md_bold(s):
+    """Convert **text** markdown → <b>text</b> HTML (safe: escape first, then convert)."""
+    return _re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', html.escape(str(s or "")))
+
 NUM2LET = {"1": "A", "2": "B", "3": "C", "4": "D"}
+
+def _build_tag_html(item):
+    """Return tag spans for this item based on topic_kb + PYQ data.
+    If the attributes are already on the dict (in-pipeline), use them.
+    If reading from Supabase (build_pdf path), do a quick topic_kb lookup."""
+    # --- enrich from topic_kb if not already on item ---
+    if "topic_kb_never_skipped" not in item and item.get("category"):
+        try:
+            rows = C.sb_select("topic_kb", params={
+                "topic": f"ilike.%{item['category']}%", "limit": "1"})
+            if rows:
+                kb = rows[0]
+                item["topic_kb_never_skipped"] = bool(kb.get("never_skipped"))
+                item["topic_kb_trajectory"] = kb.get("trajectory", "")
+        except Exception:
+            pass
+    # --- enrich PYQ tag if not already set ---
+    if "pyq_match_year" not in item:
+        text = f"{(item.get('title') or '').replace('**', '')} {item.get('summary') or ''}".strip()
+        if text:
+            m = C.pyq_lookup(text, n=1, max_distance=0.35)
+            if m:
+                item["pyq_match_year"] = m.get("year")
+    # --- build HTML ---
+    tags = []
+    if item.get("pyq_match_year"):
+        tags.append(("&#127919; RPSC " + str(item["pyq_match_year"]), "#c2410c"))
+    if item.get("topic_kb_never_skipped"):
+        tags.append(("&#9889; Never skipped in 6 yrs", "#15803d"))
+    if item.get("topic_kb_trajectory") == "rising":
+        tags.append(("&#128200; Rising trend", "#1d4ed8"))
+    if not tags:
+        return ""
+    spans = "".join(
+        f'<span style="background:{col};color:white;padding:1px 6px;border-radius:3px;'
+        f'font-size:8pt;margin-right:5px;">{t}</span>'
+        for t, col in tags)
+    return f'<div style="margin-top:3px;">{spans}</div>'
 
 def find_linked_pyqs(en_items, threshold=0.70, max_n=3):
     """For each EN main item, find the single best-matching prelims PYQ in ChromaDB.
@@ -147,27 +191,23 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
     L = labels
     items_html = []
     for it in main_items:
-        bullets = "".join(f"<li>{esc(b)}</li>" for b in (it.get("bullets") or []))
+        # Bullets: **text** → <b>text</b>
+        bullets = "".join(f"<li>{md_bold(b)}</li>" for b in (it.get("bullets") or []))
 
-        # Get RAG tags
-        tags = rag.get_pdf_tags(it)
-        tags_html = ""
-        if tags:
-            tag_items = "".join(
-                f'<span class="tag" style="background:{c}; color:white; padding:2px 6px; '
-                f'border-radius:3px; font-size:11px; margin-right:6px;">{esc(t)}</span>'
-                for t, c in [(tag['text'], tag['color']) for tag in tags]
-            )
-            tags_html = f'<div class="tags" style="margin-top:4px;">{tag_items}</div>'
+        # RAG tags (from item attributes set during enrichment, or live topic_kb lookup)
+        tags_html = _build_tag_html(it)
+
+        # Static connect: just the chapter name (Claude now returns short form)
+        static_val = (it.get("static_connect") or "").split("—")[0].split(":")[0].strip()
 
         items_html.append(f"""
         <div class="item">
-          <div class="cat"><span class="dot">&#9679;</span> {esc(it.get('category'))}</div>
+          <div class="cat"><span class="dot">&#8226;</span> {esc(it.get('category'))}</div>
           <div class="title">{esc(it.get('title')).replace('**','')}</div>
           <div class="summary">{esc(it.get('summary'))}</div>
           <div class="context">{esc(it.get('context'))}</div>
           <ul>{bullets}</ul>
-          <div class="static">&#9656; {L['static']}: <b>{esc(it.get('static_connect'))}</b></div>
+          <div class="static">&#8226; {L['static']}: <b>{esc(static_val)}</b></div>
           {tags_html}
         </div>""")
 
@@ -181,7 +221,7 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
     connects = [it.get("static_connect") for it in main_items if it.get("static_connect")]
     connects_html = ""
     if connects:
-        connects_html = (f"<div class='connects'>&#9656; <b>{L['connects']}:</b> "
+        connects_html = (f"<div class='connects'>&#8226; <b>{L['connects']}:</b> "
                          + " · ".join(esc(c) for c in connects) + "</div>")
 
     pyq_html = render_pyq_section(linked_pyqs or [], lang, main_items, L)
