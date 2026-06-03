@@ -816,8 +816,45 @@ def _text_quality(text):
 
 
 # Pre-filter: one-hit reject for clear advertisement signals
-AD_REJECT = {"emoluments", "vacancy", "applicant", "shortlisted",
-             "hiring", "walkin", "sarkari"}
+AD_REJECT = {
+    # Job / recruitment ads
+    "emoluments", "vacancy", "applicant", "shortlisted", "hiring", "walkin",
+    "sarkari", "vacancies", "librarian",
+    # Education / admission ads
+    "eligibility", "admissions", "semester", "embark", "tuition",
+    # Tender / procurement / RFP ads
+    "tenderer", "bidder", "corrigendum", "rfp",
+}
+
+def _recent_published_toks(days=7):
+    """Return list of token-sets from items published in the last `days` days.
+    Used to skip stories that already appeared in a recent PDF."""
+    import datetime as _dt
+    cutoff = (_dt.date.today() - _dt.timedelta(days=days)).isoformat()
+    try:
+        rows = C.sb_select("daily_ca_items", params={
+            "date": f"gte.{cutoff}", "language": "eq.EN",
+            "is_main": "eq.true", "select": "title,date"})
+        return [tokenize(r.get("title", "")) for r in (rows or []) if r.get("title")]
+    except Exception:
+        return []
+
+
+def _is_recent_duplicate(item, recent_tok_sets, threshold=0.55):
+    """True if item title/summary shares >threshold Jaccard similarity with any
+    recently published item. Catches stories that ran yesterday and reappear today."""
+    item_toks = tokenize((item.get("title") or "") + " " + (item.get("text") or "")[:150])
+    if not item_toks:
+        return False
+    for rtoks in recent_tok_sets:
+        if not rtoks:
+            continue
+        inter = len(item_toks & rtoks)
+        union = len(item_toks | rtoks)
+        if union and inter / union >= threshold:
+            return True
+    return False
+
 
 def run_filters(item, cats):
     """5-filter chain. Returns enriched item or None (rejected)."""
@@ -825,13 +862,20 @@ def run_filters(item, cats):
     toks = tokenize(text)
     low = text.lower()
 
-    # PRE-REJECT advertisements
+    # PRE-REJECT advertisements (token-based, min 4 chars)
     if toks & AD_REJECT:
+        return None
+    # PRE-REJECT short ad acronyms (< 4 chars, missed by tokenizer)
+    _AD_SHORT = {" rfp ", " rfi ", " eoi ", " eot ", " nit ", " nib "}
+    if any(s in f" {low} " for s in _AD_SHORT):
         return None
 
     # PRE-REJECT IE newspaper page-header blocks (page-num + day + masthead)
-    # Pattern: "18 Tues DAy,June2,2026 TheIndIAnexPress ..."
     if re.match(r"^\d{1,2}\s+(mon|tues|wed|thurs|fri|sat|sun)", item["text"].lower().strip()):
+        return None
+
+    # PRE-REJECT address / directory entries containing a 6-digit PIN code
+    if re.search(r"\b[1-9]\d{5}\b", text):
         return None
 
     # FILTER 1 — keyword match. Require a CORE hit (category/topic word), not just
@@ -973,6 +1017,19 @@ def main(news_date, label_date, dry_run=False):
         if res:
             approved.append(res)
     C.log(f"   → approved {len(approved)} / {len(raw)} items")
+
+    # 2b. CROSS-DAY DEDUP — remove items already published in the last 7 days
+    C.log("\n[2b] CROSS-DAY DEDUP (checking last 7 days of published items)")
+    recent_toks = _recent_published_toks(days=7)
+    C.log(f"   Loaded {len(recent_toks)} recently published titles")
+    pre_dedup = len(approved)
+    approved = [it for it in approved if not _is_recent_duplicate(it, recent_toks)]
+    removed = pre_dedup - len(approved)
+    if removed:
+        C.log(f"   → removed {removed} duplicate(s) seen in last 7 days")
+    else:
+        C.log(f"   → no duplicates found")
+
     if not approved:
         C.log("\n✗ No items passed filters. Slow news day / source mismatch.")
         return None
