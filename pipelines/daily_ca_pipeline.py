@@ -716,8 +716,16 @@ def fetch_wiki(date):
 # CATEGORIES + FILTERS
 # ─────────────────────────────────────────────────────────────────────────────
 def tokenize(text):
-    return {w for w in re.findall(r"[a-zA-Z][a-zA-Z\-]{2,}", (text or "").lower())
-            if w not in STOP and len(w) >= 4}
+    tokens = set()
+    for w in re.findall(r"[a-zA-Z][a-zA-Z\-]{2,}", (text or "").lower()):
+        if w not in STOP and len(w) >= 4:
+            tokens.add(w)
+            # Also add each part of hyphenated words so "Satwik-Chirag" → {"satwik", "chirag"}
+            if "-" in w:
+                for part in w.split("-"):
+                    if len(part) >= 4 and part not in STOP:
+                        tokens.add(part)
+    return tokens
 
 def load_categories():
     cats = C.sb_select("ca_categories")
@@ -753,15 +761,28 @@ def _text_quality(text):
     # Strip trailing punctuation for length test
     clean = [re.sub(r"[^a-zA-Z\-]", "", w) for w in words]
     long = sum(1 for w in clean if len(w) > 14)
-    # Each garbled long-word cuts quality by 0.2; floor at 0.3
-    return max(0.3, 1.0 - long * 0.2)
+    # Each garbled long-word (>14 chars) cuts quality by 0.35; floor at 0.3
+    return max(0.3, 1.0 - long * 0.35)
 
+
+# Pre-filter: one-hit reject for clear advertisement signals
+AD_REJECT = {"emoluments", "vacancy", "applicant", "shortlisted",
+             "hiring", "walkin", "sarkari"}
 
 def run_filters(item, cats):
     """5-filter chain. Returns enriched item or None (rejected)."""
     text = item["text"]
     toks = tokenize(text)
     low = text.lower()
+
+    # PRE-REJECT advertisements
+    if toks & AD_REJECT:
+        return None
+
+    # PRE-REJECT IE newspaper page-header blocks (page-num + day + masthead)
+    # Pattern: "18 Tues DAy,June2,2026 TheIndIAnexPress ..."
+    if re.match(r"^\d{1,2}\s+(mon|tues|wed|thurs|fri|sat|sun)", item["text"].lower().strip()):
+        return None
 
     # FILTER 1 — keyword match. Require a CORE hit (category/topic word), not just
     # generic capture words, to avoid spurious matches. Score = 2*core + capture.

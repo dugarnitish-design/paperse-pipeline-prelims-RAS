@@ -182,21 +182,20 @@ def calculate_final_priority(item):
     Calculate final priority score combining all layers.
 
     final_score =
-        ca_tier_score (from ca_categories)
-        + pyq_boost (from ChromaDB match)
+        base priority (from run_filters — already includes tier + rajasthan + PYQ + quality penalty)
+        + pyq_boost (from ChromaDB re-check in enrich_with_pyq_matches)
         + topic_kb_boost (from topic_kb enrichment)
-        + rajasthan_bonus (if Rajasthan angle)
+
+    Using the run_filters priority as base ensures the text-quality penalty
+    (applied in run_filters via _text_quality) flows through to the final score.
 
     Returns:
         item dict with 'final_priority_score'
     """
-    score = item.get("ca_tier_score", 0.5)
+    # Priority from run_filters already encodes tier + rajasthan + text-quality penalty
+    score = item.get("priority", item.get("ca_tier_score", 0.5))
     score += item.get("pyq_boost", 0)
     score += item.get("topic_kb_boost", 0)
-
-    # Rajasthan bonus
-    if item.get("rajasthan_angle") or "Rajasthan" in item.get("title", ""):
-        score += 0.15
 
     item["final_priority_score"] = round(score, 3)
     return item
