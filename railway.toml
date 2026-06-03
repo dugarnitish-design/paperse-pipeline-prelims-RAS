@@ -2,4 +2,7 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "./pipelines/run_daily.sh"
+# SERVICE_MODE controls which service this is:
+#   curator  → runs Flask curator dashboard (ideal-compassion service)
+#   pipeline → runs daily CA pipeline (paperse-pipeline service, cron job)
+startCommand = "bash -c 'if [ \"$SERVICE_MODE\" = \"curator\" ]; then python pipelines/curator_server.py; else ./pipelines/run_daily.sh; fi'"
