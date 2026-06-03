@@ -386,25 +386,12 @@ def main(news_date, label_date):
                     source=it["source"], rajasthan_angle=it["rajasthan_angle"],
                     priority=it.get("final_priority_score", it.get("priority", 0.5)), is_main=True)
 
-        # Include RAG metadata (for PDF display and future analysis)
-        rag_meta = {
-            "pyq_match_year": it.get("pyq_match_year"),
-            "pyq_match_topic": it.get("pyq_match_topic"),
-            "pyq_similarity_score": it.get("pyq_similarity_score"),
-            "topic_kb_priority_score": it.get("topic_kb_priority_score"),
-            "topic_kb_frequency": it.get("topic_kb_frequency"),
-            "topic_kb_never_skipped": it.get("topic_kb_never_skipped"),
-            "topic_kb_trajectory": it.get("topic_kb_trajectory"),
-        }
-
         row_en = {**base, "language": "EN", "title": en.get("title"), "summary": en.get("summary"),
                   "context": en.get("context"), "bullets": en.get("bullets"),
-                  "static_connect": en.get("static_connect") or it.get("static_connect"),
-                  "rag_metadata": rag_meta}
+                  "static_connect": en.get("static_connect") or it.get("static_connect")}
         row_hi = {**base, "language": "HI", "title": hi.get("title"), "summary": hi.get("summary"),
                   "context": hi.get("context"), "bullets": hi.get("bullets"),
-                  "static_connect": hi.get("static_connect") or it.get("static_connect"),
-                  "rag_metadata": rag_meta}
+                  "static_connect": hi.get("static_connect") or it.get("static_connect")}
         ins = C.sb_insert("daily_ca_items", [row_en, row_hi])
         # keep the EN row id as canonical "source item" for MCQs
         en_id = next((r["id"] for r in ins if r["language"] == "EN"), ins[0]["id"])
