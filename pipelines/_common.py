@@ -38,7 +38,7 @@ SERVICE_KEY  = ENV.get("SUPABASE_SERVICE_KEY")
 ANTHROPIC_KEY = ENV.get("ANTHROPIC_API_KEY")
 
 # ── Config ────────────────────────────────────────────────────────────────────
-CLAUDE_MODEL     = "claude-sonnet-4-20250514"   # per spec
+CLAUDE_MODEL     = "claude-sonnet-4-20250514"   # Sonnet 4.0 (stable, until June 15 2026)
 EMBED_MODEL      = "paraphrase-multilingual-MiniLM-L12-v2"
 # NOTE: spec says collection 'paperse_prelims_pyq'; the actual built collection
 # is 'prelims_questions' (899 PYQs). We use the real one, with fallback.

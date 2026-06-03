@@ -7,9 +7,14 @@ set -euo pipefail
 DATE="${1:-$(date +%F)}"
 cd "$(dirname "$0")/.."
 
-# Calculate yesterday's date for IE PDF fetch
-# macOS: date -v-1d +%F  |  Linux: date -d 'yesterday' +%F
-NEWS_DATE=$(date -v-1d +%F 2>/dev/null || date -d 'yesterday' +%F)
+# Calculate yesterday's date based on the label date (not system date)
+# Use Python for cross-platform compatibility
+NEWS_DATE=$(python3 -c "
+import datetime
+date_obj = datetime.datetime.strptime('$DATE', '%Y-%m-%d').date()
+yesterday = date_obj - datetime.timedelta(days=1)
+print(yesterday.isoformat())
+")
 
 # WeasyPrint (step 4) needs the Homebrew libs on the dynamic-loader path.
 export DYLD_FALLBACK_LIBRARY_PATH="/opt/homebrew/lib:${DYLD_FALLBACK_LIBRARY_PATH:-}"
@@ -17,11 +22,11 @@ export DYLD_FALLBACK_LIBRARY_PATH="/opt/homebrew/lib:${DYLD_FALLBACK_LIBRARY_PAT
 echo "###############################################################"
 echo "#  PaperSe Daily CA Pipeline"
 echo "#  Label date (for output): $DATE"
-echo "#  News date (for fetching): $NEWS_DATE"
+echo "#  IE PDF date: $DATE (today) | PIB date: $NEWS_DATE (yesterday)"
 echo "###############################################################"
 
 echo; echo ">>> STEP 1: fetch_ie_pdf.py"
-python3 pipelines/fetch_ie_pdf.py "$NEWS_DATE"
+python3 pipelines/fetch_ie_pdf.py "$DATE"
 
 echo; echo ">>> STEP 2: daily_ca_pipeline.py"
 python3 pipelines/daily_ca_pipeline.py "$DATE"

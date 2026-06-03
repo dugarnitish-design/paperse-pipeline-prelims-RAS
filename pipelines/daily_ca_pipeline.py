@@ -326,7 +326,7 @@ def main(news_date, label_date):
     C.log("\n[1] FETCH SOURCES")
     raw = []
     raw += fetch_pib(news_date)
-    raw += load_ie_pdf(news_date)
+    raw += load_ie_pdf(label_date)  # IE fetched for today (label_date)
     raw += load_sujas(news_date)
     raw += fetch_wiki(news_date)
     C.log(f"   → total raw items fetched: {len(raw)}")
