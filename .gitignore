@@ -1,0 +1,20 @@
+# ── Secrets — never commit ──────────────────────────────────────────────
+.env
+.env.save
+.env.*
+
+# ── IE scraper: local session cookie (holds an authenticated session) ────
+inputs/ie_session.json
+
+# ── Caches / scraped data (regenerated locally) ─────────────────────────
+inputs/ie_cache/
+inputs/pib_cache/
+inputs/ie_ocr_cache/
+
+# ── Python bytecode ─────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+
+# Local session / handoff docs (may contain notes & passwords)
+.claude/
+HANDOFF.md

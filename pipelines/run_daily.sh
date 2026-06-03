@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PaperSe Daily CA — run the daily chain: fetch IE PDF → daily CA → MCQs → PDFs → Telegram.
+# PaperSe Daily CA — run the daily chain: scrape IE → daily CA → MCQs → PDFs → Telegram.
 # Usage:   ./pipelines/run_daily.sh [YYYY-MM-DD]   (defaults to today)
 # Stops immediately if any step fails.
 set -euo pipefail
@@ -22,11 +22,11 @@ export DYLD_FALLBACK_LIBRARY_PATH="/opt/homebrew/lib:${DYLD_FALLBACK_LIBRARY_PAT
 echo "###############################################################"
 echo "#  PaperSe Daily CA Pipeline"
 echo "#  Label date (for output): $DATE"
-echo "#  IE PDF date: $DATE (today) | PIB date: $NEWS_DATE (yesterday)"
+echo "#  IE scrape date: $NEWS_DATE (yesterday) | PIB date: $NEWS_DATE (yesterday)"
 echo "###############################################################"
 
-echo; echo ">>> STEP 1: fetch_ie_pdf.py"
-python3 pipelines/fetch_ie_pdf.py "$DATE"
+echo; echo ">>> STEP 0: ie_scraper.py  (scrape yesterday's IE articles from the website)"
+python3 pipelines/ie_scraper.py "$DATE" >/dev/null
 
 echo; echo ">>> STEP 2: daily_ca_pipeline.py"
 python3 pipelines/daily_ca_pipeline.py "$DATE"

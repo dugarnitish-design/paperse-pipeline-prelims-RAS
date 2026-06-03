@@ -22,6 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent))
 from pipelines import _common as C
 from pipelines import rag_integration as rag
+from pipelines import ie_scraper
 
 STOP = set("""a an the of to in on for and or with from this that these those is are was were be been
 as at by it its his her their our your into over under about after before only also more most than
@@ -520,178 +521,83 @@ def curator_approval_workflow(date, top_5_items, next_3_items, items_with_scores
 # ─────────────────────────────────────────────────────────────────────────────
 # SOURCES
 # ─────────────────────────────────────────────────────────────────────────────
+def _pib_cache_path(date):
+    p = C.ROOT / "inputs" / "pib_cache"
+    p.mkdir(parents=True, exist_ok=True)
+    return p / f"{date.isoformat()}.json"
+
+
 def fetch_pib(date):
-    """Source 1 — PIB. Fetch releases for the specific date using the date-filter URL.
-    PIB publishes ~40-80 press releases per day. The unfiltered Allrel.aspx page is a
-    rolling list that mixes multiple dates; ?dtFromDate= gives exactly that day's releases."""
-    items = []
-    try:
-        import requests
-        from bs4 import BeautifulSoup
-        date_str = date.strftime("%d-%m-%Y")   # PIB expects DD-MM-YYYY
-        url = (f"https://pib.gov.in/Allrel.aspx?reg=3&lang=1"
-               f"&dtFromDate={date_str}&dtToDate={date_str}")
+    """Source 1 — PIB. Fetch releases for the given date.
+    Strategy:
+      1. Serve from local JSON cache if ≥15 items already saved for this date.
+      2. Fetch live with date filter (works reliably in the morning).
+      3. If live returns <15 (page has rotated by evening), fall back to unfiltered.
+      4. Save whatever we got to cache for future re-runs.
+    PIB's rolling page typically rotates older releases off by late afternoon."""
+    import json as _json
+
+    cache_file = _pib_cache_path(date)
+
+    # 1 — serve from cache if rich enough
+    if cache_file.exists():
+        try:
+            cached = _json.loads(cache_file.read_text())
+            if len(cached) >= 15:
+                C.log(f"   PIB: {len(cached)} releases for {date.isoformat()} (from cache)")
+                return cached
+        except Exception:
+            pass
+
+    # 2 — fetch live
+    import requests
+    from bs4 import BeautifulSoup
+
+    SKIP = {"ministry", "department", "telephone", "tenders", "privacy",
+            "copyright", "policy", "hyperlink", "accessibility", "sitemap"}
+
+    def _scrape(url):
         r = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0 PaperSe/1.0"})
         r.raise_for_status()
         soup = BeautifulSoup(r.text, "html.parser")
-        seen = set()
-        SKIP = {"ministry", "department", "telephone", "tenders", "privacy",
-                "copyright", "policy", "hyperlink", "accessibility", "sitemap"}
+        seen, out = set(), []
         for a in soup.find_all("a"):
             txt = " ".join(a.get_text(" ", strip=True).split())
             if len(txt) < 30 or txt in seen:
                 continue
-            low = txt.lower()
-            if any(s in low for s in SKIP):
+            if any(s in txt.lower() for s in SKIP):
                 continue
             seen.add(txt)
-            items.append({"source": "PIB", "title": txt, "text": txt, "url": url})
-        C.log(f"   PIB: {len(items)} releases for {date.isoformat()}")
+            out.append({"source": "PIB", "title": txt, "text": txt, "url": url})
+        return out[:150]
+
+    items = []
+    try:
+        date_str = date.strftime("%d-%m-%Y")
+        items = _scrape(
+            f"https://pib.gov.in/Allrel.aspx?reg=3&lang=1"
+            f"&dtFromDate={date_str}&dtToDate={date_str}")
+        # 3 — fallback: unfiltered page if date-filtered result is too thin
+        if len(items) < 15:
+            C.log(f"   PIB date-filter thin ({len(items)}); trying unfiltered page…")
+            items = _scrape("https://pib.gov.in/Allrel.aspx?reg=3&lang=1")
     except Exception as e:
         C.log(f"   ⚠ PIB fetch failed: {e}")
-    return items[:150]
 
-
-def _fitz_blocks(path):
-    """Extract text blocks from a PDF using PyMuPDF (fitz).
-    Returns a list of clean text strings, one per logical block.
-    Blocks preserve bounding-box order (top→bottom, left→right) so
-    multi-column newspapers are split into separate blocks correctly."""
-    import fitz
-    result = []
-    doc = fitz.open(str(path))
-    for pg in doc:
-        blocks = pg.get_text("blocks")
-        # Sort top→bottom, then left→right
-        blocks.sort(key=lambda b: (round(b[1] / 10) * 10, b[0]))
-        for b in blocks:
-            if b[6] != 0:          # 0 = text, 1 = image — skip images
-                continue
-            txt = b[4].strip().replace("\n", " ")
-            txt = " ".join(txt.split())
-            if txt:
-                result.append(txt)
-    return result
-
-
-def _readable(chunk):
-    """Reject garbled newspaper blocks.
-    Stats like '75*', 'NFHS-6', 'Q3' legitimately lower alpha, so we're
-    permissive on alpha. camelCase ratio is the primary garble signal."""
-    words = chunk.split()
-    wc = len(words)
-    if not (8 <= wc <= 180):
-        return False
-    if max((len(w) for w in words), default=0) > 28:
-        return False
-    if sum(len(w) for w in words) / wc > 11.5:
-        return False
-    if sum(1 for w in words if len(w) > 18) / wc > 0.20:
-        return False
-    # camelCase joins signal masthead / column-merge garble
-    if sum(1 for w in words if re.search(r"[a-z][A-Z]", w)) / wc > 0.12:
-        return False
-    alpha = sum(c.isalpha() or c.isspace() for c in chunk) / max(1, len(chunk))
-    return alpha >= 0.70
-
-
-def _degarble(line):
-    """Split camelCase word-joins (ViratKohli → Virat Kohli) left by
-    multi-column text-flow extraction."""
-    return re.sub(r"([a-z])([A-Z])", r"\1 \2", line)
-
-
-def _line_ok(line):
-    """True if the line is readable enough to include in a candidate block."""
-    words = line.split()
-    wc = len(words)
-    if wc < 3 or wc > 25:
-        return False
-    if max((len(w) for w in words), default=0) > 25:
-        return False
-    # Reject mastheads / heavy column-merge (camelCase ratio)
-    if sum(1 for w in words if re.search(r"[a-z][A-Z]", w)) / wc > 0.15:
-        return False
-    alpha = sum(c.isalpha() or c.isspace() for c in line) / max(1, len(line))
-    return alpha >= 0.68
-
-
-def load_ie_pdf(date):
-    """Source 2 — IE PDF via PyMuPDF (fitz), falling back to pdfplumber.
-    fitz.get_text('blocks') returns one block per text-flow region with
-    bounding boxes, so multi-column newspaper columns are naturally
-    separated — no camelCase column-merge artifacts. Each block is degarbled,
-    quality-checked, and passed to the category filter. This replaces the
-    old sliding-window pdfplumber approach (which gave 5 usable blocks) and
-    now yields ~400-600 clean blocks from the same 18-page IE PDF."""
-    items = []
-    cand = [C.IE_DIR / f"{date.isoformat()}.pdf",
-            C.UPLOADS / f"ie-delhi-{date.strftime('%d-%m-%Y')}.pdf"]
-    path = next((p for p in cand if p.exists()), None)
-    if not path:
-        C.log(f"   ⚠ IE PDF not found at {cand[0]} (or uploads). Skipping IE source.")
-        return items
-    try:
-        raw_blocks = _fitz_blocks(path)
-        n_pages = 0
+    # 4 — cache if we got something useful
+    if len(items) >= 15:
         try:
-            import fitz
-            n_pages = len(fitz.open(str(path)))
+            cache_file.write_text(_json.dumps(items))
         except Exception:
             pass
-        blocks = []
-        for raw in raw_blocks:
-            dg = " ".join(_degarble(w) for w in raw.split())
-            dg = " ".join(dg.split())
-            if _readable(dg):
-                blocks.append(dg)
-        # de-dup near-identical starts
-        seen, uniq = set(), []
-        for b in blocks:
-            key = b[:60].lower()
-            if key not in seen:
-                seen.add(key); uniq.append(b)
-        for b in uniq:
-            items.append({"source": "IE", "title": b[:90], "text": b})
-        C.log(f"   IE PDF (fitz): {path.name} → {n_pages} pages, {len(items)} candidate blocks")
-    except Exception as e:
-        C.log(f"   ⚠ IE PDF fitz parse failed ({e}). Trying pdfplumber fallback …")
-        items = _load_ie_pdf_pdfplumber(date, path)
+
+    C.log(f"   PIB: {len(items)} releases for {date.isoformat()}")
     return items
 
 
-def _load_ie_pdf_pdfplumber(date, path):
-    """Fallback IE PDF extraction via pdfplumber (sliding-window degarble approach)."""
-    items = []
-    try:
-        import pdfplumber
-        blocks = []
-        with pdfplumber.open(str(path)) as pdf:
-            n = len(pdf.pages)
-            for pg in pdf.pages[:min(n, 24)]:
-                raw_lines = [l.strip() for l in (pg.extract_text() or "").split("\n") if l.strip()]
-                ok_lines = []
-                for raw in raw_lines:
-                    dg = " ".join(_degarble(w) for w in raw.split())
-                    if _line_ok(dg):
-                        ok_lines.append(dg)
-                W, STEP = 6, 4
-                for i in range(0, max(1, len(ok_lines)), STEP):
-                    chunk = " ".join(ok_lines[i:i + W])
-                    chunk = " ".join(chunk.split())
-                    if _readable(chunk):
-                        blocks.append(chunk)
-        seen, uniq = set(), []
-        for b in blocks:
-            key = b[:60].lower()
-            if key not in seen:
-                seen.add(key); uniq.append(b)
-        for b in uniq:
-            items.append({"source": "IE", "title": b[:90], "text": b})
-        C.log(f"   IE PDF (pdfplumber fallback): {path.name} → {n} pages, {len(items)} blocks")
-    except Exception as e:
-        C.log(f"   ⚠ IE PDF pdfplumber fallback also failed: {e}")
-    return items
+# ── IE PDF parsing removed 2026-06-04 ───────────────────────────────
+# The Gmail ePaper-PDF source (PyMuPDF/pdfplumber + OCR) was replaced by direct
+# website scraping. See pipelines/ie_scraper.py (fetch_ie_articles()).
 
 
 def load_sujas(date):
@@ -1000,7 +906,7 @@ def main(news_date, label_date, dry_run=False):
     C.log("\n[1] FETCH SOURCES")
     raw = []
     raw += fetch_pib(news_date)
-    raw += load_ie_pdf(label_date)  # IE PDF for label_date (today's paper)
+    raw += ie_scraper.fetch_ie_articles(news_date)  # IE web articles published yesterday
     # NOTE: load_sujas() is intentionally NOT called here; use monthly pipeline for SUJAS.
     raw += fetch_wiki(news_date)
     C.log(f"   → total raw items fetched: {len(raw)}")
@@ -1111,7 +1017,7 @@ def main(news_date, label_date, dry_run=False):
         base = dict(date=label_date.isoformat(), category=it["category"], tier=it["tier"],
                     source=it["source"], rajasthan_angle=it["rajasthan_angle"],
                     priority=it.get("final_priority_score", it.get("priority", 0.5)),
-                    is_main=True, status="draft")   # draft until curator approves
+                    is_main=True)
 
         row_en = {**base, "language": "EN", "title": en.get("title"), "summary": en.get("summary"),
                   "context": en.get("context"), "bullets": en.get("bullets"),
@@ -1129,7 +1035,7 @@ def main(news_date, label_date, dry_run=False):
         a = gen_also(it)
         base = dict(date=label_date.isoformat(), category=it["category"], tier=it["tier"],
                     source=it["source"], rajasthan_angle=it["rajasthan_angle"],
-                    priority=it["priority"], is_main=False, status="approved",  # "also in news" always visible
+                    priority=it["priority"], is_main=False,
                     static_connect=it.get("static_connect"))
         C.sb_insert("daily_ca_items", [
             {**base, "language": "EN", "title": a["en"]["title"], "one_liner": a["en"]["one_liner"]},

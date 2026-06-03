@@ -256,9 +256,10 @@ def fetch_ie_pdf(news_date: datetime.date) -> bool:
 
 
 if __name__ == "__main__":
-    news_date = C.parse_date(sys.argv[1]) if len(sys.argv) > 1 else datetime.date.today()
-    C.log("=" * 64)
-    C.log(f"PaperSe Fetch IE PDF — {news_date.isoformat()}")
-    C.log("=" * 64)
-    success = fetch_ie_pdf(news_date)
-    sys.exit(0 if success or (C.IE_DIR / f"{news_date.isoformat()}.pdf").exists() else 1)
+    # ── DEPRECATED 2026-06-04 ───────────────────────────────────────────────
+    # The Gmail ePaper-PDF fetch was replaced by direct website scraping.
+    # Use:  python3 pipelines/ie_scraper.py <date>   (Step 0 of run_daily.sh)
+    # This script is kept for reference only and no longer runs.
+    C.log("⚠ fetch_ie_pdf.py is DEPRECATED — IE is now scraped from the website.")
+    C.log("  Run instead:  python3 pipelines/ie_scraper.py <YYYY-MM-DD>")
+    sys.exit(0)
