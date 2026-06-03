@@ -90,16 +90,17 @@ def mark_draft_status(date_str: str, status: str, extra: dict = None) -> None:
 def main(date_str: str) -> None:
     C.log(f"\n>>> curator_workflow.py — {date_str}")
 
-    # Fetch top 8 items for this date (EN, ordered by score)
+    # Fetch top 8 items for this date (EN main, ordered by priority)
     try:
         items = C.sb_select(
             "daily_ca_items",
             select="*",
             params={
-                "date":  f"eq.{date_str}",
-                "lang":  "eq.EN",
-                "order": "final_priority_score.desc.nullslast",
-                "limit": "8",
+                "date":     f"eq.{date_str}",
+                "language": "eq.EN",
+                "is_main":  "eq.true",
+                "order":    "priority.desc.nullslast",
+                "limit":    "8",
             },
         )
     except Exception as e:

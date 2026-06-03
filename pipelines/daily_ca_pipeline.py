@@ -742,6 +742,21 @@ RAJ_KEYS = ("rajasthan", "jaipur", "jodhpur", "udaipur", "kota", "ajmer", "bikan
 
 TIER_BASE = {1: 1.0, 2: 0.7, 3: 0.4}
 
+def _text_quality(text):
+    """Quality penalty for word-fused garble not caught by camelCase check.
+    All-lowercase joins (movedatone, tweenhimand) have no case change, but
+    are very long. Count tokens > 14 chars as garble indicators.
+    Returns 0.3 – 1.0 multiplier applied to priority before ranking."""
+    words = text.split()
+    if not words:
+        return 1.0
+    # Strip trailing punctuation for length test
+    clean = [re.sub(r"[^a-zA-Z\-]", "", w) for w in words]
+    long = sum(1 for w in clean if len(w) > 14)
+    # Each garbled long-word cuts quality by 0.2; floor at 0.3
+    return max(0.3, 1.0 - long * 0.2)
+
+
 def run_filters(item, cats):
     """5-filter chain. Returns enriched item or None (rejected)."""
     text = item["text"]
@@ -792,6 +807,10 @@ def run_filters(item, cats):
            pyq["subject"].lower() == str(best["static_subject"]).lower():
             static_connect = pyq["topic"] or static_connect
 
+    # Apply text-quality multiplier: penalise word-fused garble (long tokens)
+    quality = _text_quality(text)
+    priority = round(priority * quality, 3)
+
     item.update({
         "category": best.get("category"),
         "tier": tier,
@@ -799,9 +818,10 @@ def run_filters(item, cats):
         "static_connect": static_connect,
         "static_subject": best.get("static_subject"),
         "exam_ref": exam_ref,
-        "priority": round(priority, 3),
+        "priority": priority,
         "match_score": best_score,
         "match_core": best_core,
+        "text_quality": round(quality, 2),
     })
     return item
 
@@ -896,7 +916,8 @@ def main(news_date, label_date, dry_run=False):
     approved.sort(key=lambda x: x.get("final_priority_score", x.get("priority", 0.5)), reverse=True)
 
     # 3. RANK + SELECT  (dedup by category for variety in the main 5)
-    approved.sort(key=lambda x: x["priority"], reverse=True)
+    # Use final_priority_score from RAG enrichment (incorporates topic_kb + PYQ boosts)
+    approved.sort(key=lambda x: x.get("final_priority_score", x["priority"]), reverse=True)
     main_items, seen_cat = [], set()
     for it in approved:
         if it["category"] in seen_cat:
