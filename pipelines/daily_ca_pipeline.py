@@ -574,42 +574,45 @@ def _canon_category_from_topic(topic, cats):
 
 
 def fetch_pib(date):
-    """Source 1 — PIB. Real National/English press releases for `date`.
-
-    The release list is JS / ASP.NET-postback rendered behind an Akamai bot wall,
-    so the actual scrape lives in pipelines/pib_scraper.py (headed Playwright —
-    see that module's docstring for why headless / plain-requests don't work).
-    Here we keep the cache scaffolding:
-      1. Serve from local JSON cache if ≥15 items already saved for this date.
-      2. Otherwise scrape live via pib_scraper.scrape_pib(date).
-      3. Save the result to cache (≥15 items) so future back-fills reuse it — the
-         live page exposes a given date only briefly before it rotates off."""
+    """Source 1 — PIB. CONSUMER (no live scrape here — scraping is the local headed
+    producer in pib_scraper.py, since Akamai blocks headless / datacenter IPs on
+    Allrel.aspx). Read order:
+        1. Supabase pib_cache for this date  — how Railway gets full PIB coverage
+        2. local inputs/pib_cache/<date>.json — offline / dev fallback
+        3. PIB RSS feed                       — Railway-safe last resort (partial)
+    Populate the caches by running the producer:
+        python3 pipelines/pib_scraper.py --date <YYYY-MM-DD> --write-supabase
+    """
     import json as _json
     from pipelines import pib_scraper
 
-    cache_file = _pib_cache_path(date)
+    iso = date.isoformat()
 
-    # 1 — serve from cache if rich enough
+    # 1 — Supabase pib_cache (primary; what Railway reads)
+    try:
+        rows = C.sb_select("pib_cache", params={"published_date": f"eq.{iso}", "select": "*"})
+        if rows and len(rows) >= 15:
+            items = [{"source": "PIB", "title": r.get("title"),
+                      "text": r.get("text"), "url": r.get("url")} for r in rows]
+            C.log(f"   PIB: {len(items)} releases for {iso} (Supabase pib_cache)")
+            return items
+    except Exception as e:
+        C.log(f"   ⚠ PIB Supabase read failed: {e}")
+
+    # 2 — local JSON cache file (written by the local producer scrape)
+    cache_file = _pib_cache_path(date)
     if cache_file.exists():
         try:
             cached = _json.loads(cache_file.read_text())
             if len(cached) >= 15:
-                C.log(f"   PIB: {len(cached)} releases for {date.isoformat()} (from cache)")
+                C.log(f"   PIB: {len(cached)} releases for {iso} (local file cache)")
                 return cached
         except Exception:
             pass
 
-    # 2 — scrape live (headed Playwright + Akamai warm-up; see pib_scraper)
-    items = pib_scraper.scrape_pib(date)
-
-    # 3 — cache if we got something useful
-    if len(items) >= 15:
-        try:
-            cache_file.write_text(_json.dumps(items, ensure_ascii=False))
-        except Exception:
-            pass
-
-    C.log(f"   PIB: {len(items)} releases for {date.isoformat()}")
+    # 3 — RSS fallback (Railway-safe; ~20 latest English releases dated this day)
+    items = pib_scraper.fetch_via_rss(date)
+    C.log(f"   PIB: {len(items)} releases for {iso} (RSS fallback)")
     return items
 
 

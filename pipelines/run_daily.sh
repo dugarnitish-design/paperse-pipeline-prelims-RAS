@@ -28,6 +28,12 @@ echo "###############################################################"
 echo; echo ">>> STEP 0: ie_scraper.py  (scrape yesterday's IE articles from the website)"
 python3 pipelines/ie_scraper.py "$DATE" >/dev/null
 
+echo; echo ">>> STEP 1: pib_scraper.py  (LOCAL headed scrape → Supabase pib_cache)"
+# Headed Playwright scrape of yesterday's PIB releases, upserted to Supabase so
+# the pipeline (and Railway) can read them without a browser. Best-effort: never
+# blocks the chain (|| true) — fetch_pib falls back to local cache / RSS.
+python3 pipelines/pib_scraper.py --date "$NEWS_DATE" --write-supabase >/dev/null || true
+
 echo; echo ">>> STEP 2: daily_ca_pipeline.py"
 python3 pipelines/daily_ca_pipeline.py "$DATE"
 
