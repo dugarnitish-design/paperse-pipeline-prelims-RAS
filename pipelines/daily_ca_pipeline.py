@@ -16,13 +16,15 @@ CURATOR WORKFLOW INTEGRATION:
   Step 6: Final PDF generation and publication
 """
 import sys, re, datetime, html, json, time, threading, asyncio
-from collections import defaultdict
+from collections import defaultdict, Counter
 from pathlib import Path
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent))
 from pipelines import _common as C
 from pipelines import rag_integration as rag
 from pipelines import ie_scraper
+from pipelines import global_prereject as PRE      # LAYER 2 — hard rules, no AI
+from pipelines import rpsc_relevance as RPSC       # LAYER 3 — Claude relevance gate
 
 STOP = set("""a an the of to in on for and or with from this that these those is are was were be been
 as at by it its his her their our your into over under about after before only also more most than
@@ -527,6 +529,50 @@ def _pib_cache_path(date):
     return p / f"{date.isoformat()}.json"
 
 
+def _write_rpsc_log(label_date, n_raw, dropped2, rpsc_log):
+    """Persist the day's filter audit trail: Layer-2 hard drops + Layer-3 Claude
+    verdicts. Returns the path written."""
+    p = C.ROOT / "inputs" / "rpsc_logs"
+    p.mkdir(parents=True, exist_ok=True)
+    path = p / f"{label_date.isoformat()}.json"
+    vc = Counter(e["verdict"] for e in rpsc_log)
+    payload = {
+        "date": label_date.isoformat(),
+        "counts": {
+            "raw": n_raw,
+            "layer2_dropped": len(dropped2),
+            "layer3_evaluated": len(rpsc_log),
+            "YES": vc.get("YES", 0), "MAYBE": vc.get("MAYBE", 0),
+            "NO": vc.get("NO", 0), "SKIPPED": vc.get("SKIPPED", 0),
+        },
+        "layer2_dropped": [{"title": d.get("title"), "source": d.get("source"),
+                            "reason": d.get("_reason")} for d in dropped2],
+        "layer3": rpsc_log,
+    }
+    try:
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+    except Exception as e:
+        C.log(f"   ⚠ rpsc_filter_log write failed: {e}")
+    return path
+
+
+def _canon_category_from_topic(topic, cats):
+    """Map Claude's free-text TOPIC_MATCH to a canonical ca_category name by word
+    overlap. Returns a category name ONLY when the best match is unambiguous
+    (>=2 shared words AND a strictly unique winner); else None (keep keyword cat).
+    Used for the cosmetic display-category override (FIX 3)."""
+    if not topic or topic.strip().lower() in ("none", ""):
+        return None
+    tw = set(re.findall(r"[a-z]{4,}", topic.lower()))
+    if not tw:
+        return None
+    scored = sorted(((len(tw & set(re.findall(r"[a-z]{4,}", (c["category"] or "").lower()))),
+                      c["category"]) for c in cats), reverse=True)
+    if scored and scored[0][0] >= 2 and (len(scored) == 1 or scored[0][0] > scored[1][0]):
+        return scored[0][1]
+    return None
+
+
 def fetch_pib(date):
     """Source 1 — PIB. Real National/English press releases for `date`.
 
@@ -666,9 +712,22 @@ def load_categories():
             cap |= tokenize(phrase)
         c["_core_kw"] = core
         c["_capture_kw"] = cap | core
+        # STRUCTURAL FIX (req 3): National S&T must fire ONLY on explicit
+        # science-domain terms, never on the generic name tokens
+        # 'national'/'science'/'technology' (which let ceremonial/governance
+        # stories leak in). Replace its core with the explicit allow-list.
+        if c["category"] == "National Science & Technology":
+            c["_core_kw"] = set(SNT_EXPLICIT_TOKENS)
+            c["_capture_kw"] = set(SNT_EXPLICIT_TOKENS) | cap
+        # Only SINGLE-WORD ignore entries feed the loose ">=3 ignore tokens"
+        # bucket. Multi-word ignore entries are precise phrases (matched via
+        # _ignore_phrases below); tokenizing them here would dump common words
+        # (days, party, india, country…) into the loose bucket and cause legit
+        # stories to be wrongly rejected on 3 scattered generic words.
         ign = set()
         for phrase in (c.get("what_to_ignore") or []):
-            ign |= tokenize(phrase)
+            if phrase and len(phrase.split()) == 1:
+                ign |= tokenize(phrase)
         c["_ignore_kw"] = ign
         # Ignore PHRASES (lowercased) for word-boundary matching — precise, so a
         # distinctive fragment like "round 2" rejects on its own, while generic
@@ -683,9 +742,29 @@ RAJ_KEYS = ("rajasthan", "jaipur", "jodhpur", "udaipur", "kota", "ajmer", "bikan
 
 # A "Sports & Awards" story must contain at least one of these (substring match on
 # lowercased text) to pass FILTER 3.5 — otherwise it's a foreign-only fixture with
-# no India/national-merit angle and is dropped.
+# no India/national-merit angle and is dropped. (req 2: India angle OR a clear
+# achievement/merit signal — medal/gold/champion/etc.)
 SPORTS_REQUIRED_TOKENS = ("india", "indian", "bharat", "rajasthan", "arjun",
-                          "khel ratna", "olympic", "asian games", "commonwealth")
+                          "khel ratna", "olympic", "asian games", "commonwealth",
+                          "medal", "gold", "silver", "bronze", "champion",
+                          "winner", "award", "record")
+
+# STRUCTURAL FIX (req 1): these single-word core tokens are too generic to anchor
+# a category on their own. If EVERY core hit for a category is one of these, the
+# story must share >=2 total keywords with that category before it qualifies.
+# 'international' is included alongside the requested six (same magnet class —
+# it was pulling foreign cricket into Intl-Politics/Orgs/Global-Sports).
+GENERIC_CORE_TOKENS = {"national", "global", "world", "technology", "bilateral",
+                       "commission", "international"}
+
+# STRUCTURAL FIX (req 3): the ONLY tokens that may trigger National S&T — explicit
+# science-domain terms, replacing the generic name tokens.
+SNT_EXPLICIT_TOKENS = {
+    "isro", "drdo", "nasa", "space", "satellite", "spacecraft", "rocket",
+    "missile", "nuclear", "biotech", "biotechnology", "semiconductor", "quantum",
+    "genome", "genomic", "vaccine", "artificial", "intelligence", "scientific",
+    "research", "chandrayaan", "gaganyaan", "spadex", "supercomputer", "telescope",
+}
 
 TIER_BASE = {1: 1.0, 2: 0.7, 3: 0.4}
 
@@ -785,10 +864,17 @@ def run_filters(item, cats):
     # generic capture words, to avoid spurious matches. Score = 2*core + capture.
     best, best_score, best_core = None, 0, 0
     for c in cats:
-        core_hits = len(toks & c["_core_kw"])
-        if core_hits < 1:
+        core_set = toks & c["_core_kw"]
+        if not core_set:
             continue                       # must hit a core keyword
-        score = 2 * core_hits + len(toks & c["_capture_kw"])
+        cap_hits = len(toks & c["_capture_kw"])
+        # STRUCTURAL (req 1): an over-generic single token (national/global/world/
+        # technology/bilateral/commission/international) can't anchor a category on
+        # its own. If EVERY core hit is generic, require >=2 total keyword matches.
+        if core_set <= GENERIC_CORE_TOKENS and cap_hits < 2:
+            continue
+        core_hits = len(core_set)
+        score = 2 * core_hits + cap_hits
         if score > best_score:
             best, best_score, best_core = c, score, core_hits
     if not best:
@@ -854,6 +940,63 @@ def run_filters(item, cats):
         "match_core": best_core,
         "text_quality": round(quality, 2),
     })
+    return item
+
+
+def score_item(item, cats):
+    """LAYER: category_keyword_filter — SCORE ONLY (not a hard gate).
+
+    Assigns the best category + a keyword-based priority using the same structural
+    2-token generic rule as run_filters, but NEVER drops: hard non-RPSC rejects are
+    Layer 2 (global_prereject) and final relevance is Layer 3 (rpsc_relevance).
+    Returns the item, always — category is None if nothing matched."""
+    text = item["text"]
+    toks = tokenize(text)
+    low = text.lower()
+    item_raj = any(k in low for k in RAJ_KEYS)
+
+    best, best_score, best_core = None, 0, 0
+    for c in cats:
+        core_set = toks & c["_core_kw"]
+        if not core_set:
+            continue
+        cap_hits = len(toks & c["_capture_kw"])
+        if core_set <= GENERIC_CORE_TOKENS and cap_hits < 2:
+            continue
+        score = 2 * len(core_set) + cap_hits
+        if score > best_score:
+            best, best_score, best_core = c, score, len(core_set)
+
+    quality = _text_quality(text)
+    if best:
+        tier = best.get("tier") or 3
+        priority = TIER_BASE.get(tier, 0.4) + 0.05 * best_score
+        if item_raj:
+            priority += 0.3
+        static_connect = best.get("static_topic_link") or best.get("category")
+        exam_ref = None
+        pyq = C.pyq_lookup(text, max_distance=0.33)
+        if pyq:
+            priority += 0.2
+            exam_ref = f"{pyq['subject']} · asked {pyq['year']}"
+            if pyq.get("subject") and best.get("static_subject") and \
+               pyq["subject"].lower() == str(best["static_subject"]).lower():
+                static_connect = pyq["topic"] or static_connect
+        item.update({
+            "category": best.get("category"), "tier": tier,
+            "rajasthan_angle": item_raj or bool(best.get("rajasthan_angle")),
+            "static_connect": static_connect, "static_subject": best.get("static_subject"),
+            "exam_ref": exam_ref, "priority": round(priority * quality, 3),
+            "match_score": best_score, "match_core": best_core,
+            "text_quality": round(quality, 2),
+        })
+    else:
+        item.update({
+            "category": None, "tier": 3, "rajasthan_angle": item_raj,
+            "static_connect": None, "static_subject": None, "exam_ref": None,
+            "priority": round(0.2 * quality, 3), "match_score": 0, "match_core": 0,
+            "text_quality": round(quality, 2),
+        })
     return item
 
 
@@ -943,39 +1086,58 @@ def main(news_date, label_date, dry_run=False):
         C.log("\n✗ No source items fetched. Aborting (no data).")
         return None
 
-    # 2. FILTER
-    C.log("\n[2] FILTER (keyword → tier → ignore → rajasthan → chromaDB)")
-    cats = load_categories()
-    approved = []
-    for it in raw:
-        res = run_filters(it, cats)
-        if res:
-            approved.append(res)
-    C.log(f"   → approved {len(approved)} / {len(raw)} items")
+    # ── LAYER 2 — GLOBAL PRE-REJECT (hard rules, no AI) ──────────────────────
+    C.log("\n[2] LAYER 2 — GLOBAL PRE-REJECT (hard rules)")
+    kept2, dropped2 = PRE.apply(raw)
+    C.log(f"   → dropped {len(dropped2)} / {len(raw)}; {len(kept2)} remain")
+    for reason, n in Counter(d["_reason"] for d in dropped2).most_common():
+        C.log(f"      · {reason}: {n}")
 
-    # 2b. CROSS-DAY DEDUP — remove items already published in the last 7 days
-    C.log("\n[2b] CROSS-DAY DEDUP (checking last 7 days of published items)")
+    # ── CROSS-DAY DEDUP (remove items published in the last 7 days) ───────────
+    C.log("\n[2b] CROSS-DAY DEDUP (last 7 days)")
     recent_toks = _recent_published_toks(days=7)
-    C.log(f"   Loaded {len(recent_toks)} recently published titles")
-    pre_dedup = len(approved)
-    approved = [it for it in approved if not _is_recent_duplicate(it, recent_toks)]
-    removed = pre_dedup - len(approved)
-    if removed:
-        C.log(f"   → removed {removed} duplicate(s) seen in last 7 days")
-    else:
-        C.log(f"   → no duplicates found")
+    pre_dedup = len(kept2)
+    deduped = [it for it in kept2 if not _is_recent_duplicate(it, recent_toks)]
+    C.log(f"   → removed {pre_dedup - len(deduped)} duplicate(s); {len(deduped)} remain")
+
+    # ── CATEGORY KEYWORD FILTER — SCORE ONLY (not a hard gate) ───────────────
+    C.log("\n[2c] KEYWORD SCORING (assign category + priority; no hard drop)")
+    cats = load_categories()
+    scored = [score_item(it, cats) for it in deduped]
+    scored.sort(key=lambda x: x.get("priority", 0), reverse=True)   # best-first for the call cap
+
+    # ── LAYER 3 — RPSC RELEVANCE (Claude Sonnet, ≤ MAX_CALLS/day) ─────────────
+    C.log(f"\n[3] LAYER 3 — RPSC RELEVANCE (Claude, cap {RPSC.MAX_CALLS}/day)")
+    approved, rpsc_log = RPSC.apply(scored, max_calls=RPSC.MAX_CALLS)
+    vc = Counter(e["verdict"] for e in rpsc_log)
+    C.log("   → verdicts: " + ", ".join(f"{k}={vc.get(k, 0)}"
+                                         for k in ("YES", "MAYBE", "NO", "SKIPPED")))
+    C.log(f"   → kept (YES+MAYBE): {len(approved)}")
+
+    # persist the day's filter log (Layer 2 drops + Layer 3 verdicts)
+    log_path = _write_rpsc_log(label_date, len(raw), dropped2, rpsc_log)
+    C.log(f"   → rpsc_filter_log: {log_path}")
 
     if not approved:
-        C.log("\n✗ No items passed filters. Slow news day / source mismatch.")
+        C.log("\n✗ No items passed relevance. Slow news day / source mismatch.")
         return None
 
-    # 2.5. RAG ENRICHMENT (3-layer intelligence: ChromaDB PYQs + topic_kb)
-    C.log("\n[2.5] RAG ENRICHMENT (ChromaDB PYQs + topic_kb priorities)")
-    # Build ca_category_map for enrichment
+    # FIX 3 — cosmetic: prefer Claude's TOPIC_MATCH for the DISPLAY category when it
+    # maps unambiguously to a known category (corrects keyword mislabels, e.g. a
+    # dope-lab MoU shown as "Global Sports" or a highway shown as "National Sports").
+    _recat = 0
+    for it in approved:
+        canon = _canon_category_from_topic(it.get("rpsc_topic"), cats)
+        if canon and canon != it.get("category"):
+            it["_keyword_category"] = it.get("category")
+            it["category"] = canon
+            _recat += 1
+    C.log(f"   → display-category corrected from TOPIC_MATCH for {_recat} item(s)")
+
+    # ── LAYER 4 — RAG ENRICHMENT (unchanged) ─────────────────────────────────
+    C.log("\n[4] RAG ENRICHMENT (ChromaDB PYQs + topic_kb priorities)")
     ca_map = {i: item.get("category") for i, item in enumerate(approved)}
-    # Enrich with 3-layer RAG
     approved = rag.enrich_ca_items(approved, ca_category_map=ca_map)
-    # Re-sort by final_priority_score (combining all layers)
     approved.sort(key=lambda x: x.get("final_priority_score", x.get("priority", 0.5)), reverse=True)
 
     # 3. RANK + SELECT  (dedup by category for variety in the main 5)

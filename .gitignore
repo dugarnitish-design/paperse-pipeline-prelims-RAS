@@ -10,6 +10,7 @@ inputs/ie_session.json
 inputs/ie_cache/
 inputs/pib_cache/
 inputs/ie_ocr_cache/
+inputs/rpsc_logs/
 
 # ── Python bytecode ─────────────────────────────────────────────────────
 __pycache__/
