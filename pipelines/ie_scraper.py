@@ -9,6 +9,8 @@ articles directly from the website — clean HTML text, no OCR.
 
   # scrape articles PUBLISHED on 2026-06-03 (the day before the pipeline date):
   python3 pipelines/ie_scraper.py 2026-06-04
+  # or scrape an EXACT date directly (force re-scrape — for testing / back-fill):
+  python3 pipelines/ie_scraper.py --date 2026-06-03
 
 As a library (how daily_ca_pipeline.py uses it):
   from pipelines import ie_scraper
@@ -32,6 +34,7 @@ NOTE ON LOGIN
   content is readable without login). If login breaks after credentials are
   added, that's the one place to adjust.
 """
+import re
 import sys
 import json
 import time
@@ -60,12 +63,14 @@ UA = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 
-# How many listing pages to walk per section before giving up. The stop-logic
-# (below) halts once we've paged past the target day, so this is just an upper
-# bound — set high enough to reach 2-day-old articles on a back-fill.
-MAX_PAGES = 10
 MIN_WORDS = 100
 REQUEST_GAP = 0.7   # politeness delay between requests (seconds)
+
+# Date-addressable archive sitemap. IE publishes one <urlset> per calendar day at
+# sitemap.xml?yyyy=YYYY&mm=MM&dd=DD (90+ days back), so we fetch a target day's
+# articles directly instead of walking the live section listings (which only
+# surface the most recent ~25 stories and can't reach a 2-day-old back-fill).
+SITEMAP_DATED = BASE + "/sitemap.xml?yyyy={y}&mm={m:02d}&dd={d:02d}"
 
 # World: keep only India-relevant / diplomacy / governance headlines.
 WORLD_KEYWORDS = [
@@ -79,17 +84,29 @@ EXPLAINED_KEYWORDS = [
     "survey", "report", "data", "health", "population", "economy", "index",
 ]
 
-SECTIONS = [
-    # PRIORITY 1 — scrape everything
-    {"name": "sports", "path": "/section/sports/", "filter": None},
-    {"name": "india",  "path": "/section/india/",  "filter": None},
-    # PRIORITY 2 — world, India/diplomacy headlines only
-    {"name": "world",  "path": "/section/world/",  "filter": WORLD_KEYWORDS},
-    # PRIORITY 3 — cities, Jaipur/Rajasthan only
-    {"name": "cities", "path": "/section/cities/", "filter": CITY_KEYWORDS},
-    # PRIORITY 4 — explained, data/report headlines only
-    {"name": "explained", "path": "/explained/",   "filter": EXPLAINED_KEYWORDS},
-]
+# Section policy, keyed by the <section> slug in /article/<section>/… URLs.
+#   None        → keep every article in the section (RPSC-core sections)
+#   [keywords]  → keep only articles whose headline matches one of the keywords
+# Sections not listed here are skipped entirely (entertainment, lifestyle,
+# technology, legal-news, business, opinion, horoscope, trending, …).
+SECTION_POLICY = {
+    "sports": None,                 # full — RPSC tests national/global sports & awards
+    "india": None,                  # full — national politics, governance, schemes
+    "political-pulse": None,        # full — Indian politics / governance
+    "world": WORLD_KEYWORDS,        # India-diplomacy headlines only
+    "explained": EXPLAINED_KEYWORDS,  # data/report/policy pieces only
+    "cities": CITY_KEYWORDS,        # Rajasthan-only (also URL-prefiltered below)
+}
+# NOTE: IE's "upsc-current-affairs" desk is deliberately EXCLUDED — it carries
+# study aids (daily quizzes, "UPSC Key", "Knowledge Nugget", weekly snapshots),
+# not discrete news events, so it's the wrong shape for per-item CA authoring.
+# Its actual news (e.g. a PM foreign visit) is already covered via india/world.
+
+# Rajasthan city/region slugs — used to pre-filter the (large) cities section by
+# URL before fetching bodies, so we don't pull 60+ non-Rajasthan city stories.
+RAJ_CITY_SLUGS = ("jaipur", "jodhpur", "udaipur", "kota", "ajmer", "bikaner",
+                  "jaisalmer", "bharatpur", "alwar", "sikar", "bhilwara",
+                  "pali", "nagaur", "jhunjhunu", "rajasthan")
 
 # URL fragments that mark non-article content we never want.
 SKIP_URL_BITS = ("/photos/", "/photo-", "/videos/", "/video/", "/audio/",
@@ -217,34 +234,45 @@ def _get_soup(sess, url):
         return None
 
 
-def _section_page_url(path, page):
-    if page <= 1:
-        return BASE + path
-    return f"{BASE}{path}page/{page}/"
+def _sitemap_candidates(sess, news_date):
+    """Discover candidate article URLs for `news_date` from the dated archive
+    sitemap, returning [(url, section)] for sections we keep (per SECTION_POLICY).
 
+    The cities section is pre-filtered by URL to Rajasthan slugs so we don't fetch
+    dozens of unrelated city stories. Headline keyword filters (world/explained)
+    and the strict published-date check are applied later, after the body fetch."""
+    url = SITEMAP_DATED.format(y=news_date.year, m=news_date.month, d=news_date.day)
+    try:
+        r = sess.get(url, timeout=30)
+        if r.status_code != 200:
+            C.log(f"   ⚠ IE sitemap {url} → HTTP {r.status_code}")
+            return []
+    except Exception as e:
+        C.log(f"   ⚠ IE sitemap fetch failed {url}: {e}")
+        return []
 
-def _article_links(soup):
-    """Collect candidate article URLs from a section listing page."""
-    links = []
-    seen = set()
-    for a in soup.select("div.articles a, div.nation a, h2 a, h3 a, .title a, a"):
-        href = a.get("href") or ""
-        if not href.startswith("http"):
+    out, seen = [], set()
+    bysec = {}
+    for loc in re.findall(r"<loc>(.*?)</loc>", r.text):
+        href = html.unescape(loc.strip())
+        if "indianexpress.com" not in href or any(bit in href for bit in SKIP_URL_BITS):
             continue
-        if "indianexpress.com" not in href:
+        m = re.search(r"/article/([^/]+)/", href)
+        if not m:
             continue
-        if any(bit in href for bit in SKIP_URL_BITS):
+        section = m.group(1)
+        if section not in SECTION_POLICY:
             continue
-        # IE article URLs look like '/<section>/<slug>-<numeric-id>/'. Require a
-        # trailing numeric id to skip nav/landing links; date+parse reject the rest.
-        slug = href.rstrip("/").rsplit("/", 1)[-1]
-        if not any(ch.isdigit() for ch in slug):
+        # Cities is huge — keep only Rajasthan-region URLs before fetching bodies.
+        if section == "cities" and not any(s in href.lower() for s in RAJ_CITY_SLUGS):
             continue
         if href in seen:
             continue
         seen.add(href)
-        links.append(href)
-    return links
+        out.append((href, section))
+        bysec[section] = bysec.get(section, 0) + 1
+    C.log(f"      sitemap candidates by section: {bysec}")
+    return out
 
 
 def _extract_jsonld(soup):
@@ -361,9 +389,15 @@ def _cache_path(news_date):
 
 
 def fetch_ie_articles(news_date, force=False):
-    """Scrape IE for articles published on `news_date` across the configured
-    sections, applying the per-section headline filters. Returns a list of
+    """Fetch IE articles published on `news_date` via the date-addressable archive
+    sitemap, applying the per-section policy in SECTION_POLICY. Returns a list of
     article dicts (see module docstring).
+
+    Discovery is sitemap-driven (sitemap.xml?yyyy&mm&dd) rather than walking live
+    section listings, so any date — including multi-day back-fills — resolves
+    directly and reliably. Each candidate body is fetched once; we keep it only if
+    its JSON-LD published date matches `news_date` and its headline passes the
+    section's keyword filter.
 
     Results are cached to inputs/ie_cache/<date>.json so run_daily.sh's Step 0
     scrape is reused by daily_ca_pipeline's in-process call (no double scrape).
@@ -384,48 +418,29 @@ def fetch_ie_articles(news_date, force=False):
     C.log(f"   IE web scrape — articles published {news_date.isoformat()}")
     sess = _ensure_session()
 
+    candidates = _sitemap_candidates(sess, news_date)
+    C.log(f"   IE: {len(candidates)} candidate URLs from sitemap; fetching bodies…")
+
     out = []
     seen_urls = set()
-    for sec in SECTIONS:
-        kept_here = 0
-        for page in range(1, MAX_PAGES + 1):
-            soup = _get_soup(sess, _section_page_url(sec["path"], page))
-            time.sleep(REQUEST_GAP)
-            if soup is None:
-                break
-            links = _article_links(soup)
-            if not links:
-                break
-            page_had_target = False   # any article from the target day on this page
-            page_seen_older = False    # any article OLDER than the target day
-            for url in links:
-                if url in seen_urls:
-                    continue
-                # Parse first so we get the published date (listing pages aren't
-                # reliable for per-article timestamps).
-                art = _parse_article(sess, url, sec["name"])
-                time.sleep(REQUEST_GAP)
-                if not art:
-                    continue
-                pub = art.pop("_pub_date", None)
-                if pub is None:
-                    continue
-                if pub == news_date:
-                    page_had_target = True
-                    if _headline_matches(art["title"], sec["filter"]):
-                        seen_urls.add(url)
-                        out.append(art)
-                        kept_here += 1
-                elif pub < news_date:
-                    page_seen_older = True
-                # pub > news_date (newer than target): skip, keep paging deeper.
-            # Stop once we've paged PAST the target day: this page had no
-            # target-date articles AND we've already crossed into older ones.
-            # Pages that are still newer-than-target don't stop the walk, so a
-            # 2-day-old backfill keeps going until it reaches the target.
-            if not page_had_target and page_seen_older:
-                break
-        C.log(f"      · {sec['name']}: kept {kept_here}")
+    kept_by_sec = {}
+    for url, section in candidates:
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+        art = _parse_article(sess, url, section)
+        time.sleep(REQUEST_GAP)
+        if not art:
+            continue
+        pub = art.pop("_pub_date", None)
+        if pub != news_date:           # strict: only articles actually published that day
+            continue
+        if not _headline_matches(art["title"], SECTION_POLICY.get(section)):
+            continue
+        out.append(art)
+        kept_by_sec[section] = kept_by_sec.get(section, 0) + 1
+
+    C.log(f"      kept by section: {kept_by_sec}")
     C.log(f"   IE web scrape → {len(out)} articles for {news_date.isoformat()}")
     try:
         cache.write_text(json.dumps(out, ensure_ascii=False))
@@ -436,10 +451,27 @@ def fetch_ie_articles(news_date, force=False):
 
 # ──────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    arg = next((a for a in sys.argv[1:] if not a.startswith("--")), None)
-    pipeline_date = C.parse_date(arg) if arg else datetime.date.today()
-    news_date = pipeline_date - datetime.timedelta(days=1)
-    arts = fetch_ie_articles(news_date)
+    # --date YYYY-MM-DD scrapes that EXACT date (force re-scrape) — handy for
+    # testing a specific day or a back-fill. A bare positional arg is the
+    # pipeline/label date and scrapes the day before (news_date = arg - 1), which
+    # is how run_daily.sh's Step 0 invokes this.
+    date_flag = None
+    if "--date" in sys.argv:
+        i = sys.argv.index("--date")
+        if i + 1 < len(sys.argv):
+            date_flag = sys.argv[i + 1]
+    if date_flag is None:
+        date_flag = next((a.split("=", 1)[1] for a in sys.argv[1:]
+                          if a.startswith("--date=")), None)
+
+    if date_flag:
+        news_date = C.parse_date(date_flag)
+        arts = fetch_ie_articles(news_date, force=True)
+    else:
+        arg = next((a for a in sys.argv[1:] if not a.startswith("--")), None)
+        pipeline_date = C.parse_date(arg) if arg else datetime.date.today()
+        news_date = pipeline_date - datetime.timedelta(days=1)
+        arts = fetch_ie_articles(news_date)
     # Print JSON so the step can be inspected / piped if desired.
     print(json.dumps(arts, ensure_ascii=False, indent=2))
     print(f"\n# {len(arts)} IE articles for {news_date.isoformat()}", file=sys.stderr)

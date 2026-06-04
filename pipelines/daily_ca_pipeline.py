@@ -681,6 +681,12 @@ def load_categories():
 RAJ_KEYS = ("rajasthan", "jaipur", "jodhpur", "udaipur", "kota", "ajmer", "bikaner",
             "rajasthani", "marwar", "mewar", "jaisalmer", "rpsc", "raj.")
 
+# A "Sports & Awards" story must contain at least one of these (substring match on
+# lowercased text) to pass FILTER 3.5 — otherwise it's a foreign-only fixture with
+# no India/national-merit angle and is dropped.
+SPORTS_REQUIRED_TOKENS = ("india", "indian", "bharat", "rajasthan", "arjun",
+                          "khel ratna", "olympic", "asian games", "commonwealth")
+
 TIER_BASE = {1: 1.0, 2: 0.7, 3: 0.4}
 
 def _text_quality(text):
@@ -796,6 +802,14 @@ def run_filters(item, cats):
     if any(re.search(r"\b" + re.escape(p) + r"\b", low) for p in best.get("_ignore_phrases", [])) \
        or len(toks & best["_ignore_kw"]) >= 3:
         return None  # REJECT — looks like ignored content
+
+    # FILTER 3.5 — sports India-relevance gate. Any "Sports & Awards" category
+    # story MUST carry an India / national-merit signal, else drop. This kills
+    # foreign-only fixtures permanently (e.g. "AUS vs SA" with no India angle),
+    # generalising the per-match ignore phrases.
+    if "sports & awards" in (best.get("category") or "").lower() \
+       and not any(t in low for t in SPORTS_REQUIRED_TOKENS):
+        return None  # REJECT — foreign-only sports with no India/merit angle
 
     # FILTER 2 — tier check
     tier = best.get("tier") or 3
@@ -1070,10 +1084,27 @@ def main(news_date, label_date, dry_run=False):
 
 
 if __name__ == "__main__":
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
     dry_run = "--dry-run" in sys.argv
-    label_date = C.parse_date(args[0]) if args else datetime.date.today()
-    news_date = label_date - datetime.timedelta(days=1)
+    # --date YYYY-MM-DD sets the NEWS date (the day scraped); label_date = news+1.
+    # A bare positional arg is the label/publication date (news_date = arg - 1),
+    # as run_daily.sh invokes it.
+    date_flag = None
+    if "--date" in sys.argv:
+        i = sys.argv.index("--date")
+        if i + 1 < len(sys.argv):
+            date_flag = sys.argv[i + 1]
+    if date_flag is None:
+        date_flag = next((a.split("=", 1)[1] for a in sys.argv[1:]
+                          if a.startswith("--date=")), None)
+
+    if date_flag:
+        news_date = C.parse_date(date_flag)
+        label_date = news_date + datetime.timedelta(days=1)
+    else:
+        args = [a for a in sys.argv[1:]
+                if not a.startswith("--") and a != date_flag]
+        label_date = C.parse_date(args[0]) if args else datetime.date.today()
+        news_date = label_date - datetime.timedelta(days=1)
     C.log(f"\nEntry point: label_date={label_date.isoformat()} news_date={news_date.isoformat()}"
           + ("  [DRY-RUN]" if dry_run else ""))
     out = main(news_date, label_date, dry_run=dry_run)
