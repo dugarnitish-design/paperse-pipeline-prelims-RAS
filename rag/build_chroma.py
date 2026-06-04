@@ -66,6 +66,21 @@ def embed_texts(model, texts):
     vectors = model.encode(texts, show_progress_bar=False, batch_size=BATCH)
     return vectors.tolist()
 
+def question_embed_text(chapter, topic, question, subject=""):
+    """Embedding text for a PYQ: "{topic} | {subtopic} | {question}".
+
+    The topic tags anchor each question's vector to its syllabus area so a news
+    story only matches PYQs from the same domain (raw-question embeddings produced
+    false positives — e.g. an Arab-traveller history Q matching a Venezuela story).
+    We map the syllabus hierarchy to the requested two-tag format:
+        topic    = chapter  (broad area, e.g. "Ancient India")
+        subtopic = topic     (specific, e.g. "Post-Mauryan Dynasties")
+    Falls back to `subject` if `chapter` is blank; empty parts are dropped."""
+    broad    = (chapter or subject or "").strip()
+    specific = (topic or "").strip()
+    parts = [p for p in (broad, specific, (question or "").strip()) if p]
+    return " | ".join(parts)
+
 def chunks(lst, n):
     for i in range(0, len(lst), n):
         yield lst[i:i+n]
@@ -159,7 +174,8 @@ def main():
 
         doc_id = f"Q{year}_{q_no.zfill(3)}"
         ids_q.append(doc_id)
-        texts_q.append(text)
+        # Embed with topic context ("{chapter} | {topic} | {question}"), not raw text.
+        texts_q.append(question_embed_text(chapter, topic, text, subject))
         metas_q.append({
             "year":           year,
             "q_no":           q_no,

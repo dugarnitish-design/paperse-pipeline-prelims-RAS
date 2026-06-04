@@ -52,6 +52,7 @@ ANTHROPIC_KEY = ENV.get("ANTHROPIC_API_KEY")
 
 # ── Config ────────────────────────────────────────────────────────────────────
 CLAUDE_MODEL     = "claude-sonnet-4-20250514"   # Sonnet 4.0 (stable, until June 15 2026)
+HAIKU_MODEL      = "claude-haiku-4-5-20251001"  # cheap/fast — PYQ relevance YES/NO filter
 EMBED_MODEL      = "paraphrase-multilingual-MiniLM-L12-v2"
 # NOTE: spec says collection 'paperse_prelims_pyq'; the actual built collection
 # is 'prelims_questions' (899 PYQs). We use the real one, with fallback.
@@ -216,6 +217,32 @@ def pyq_lookup(text, n=3, max_distance=0.45):
     except Exception as e:
         print(f"   ⚠ pyq_lookup failed: {e}")
         return None
+
+def pyq_lookup_many(text, n=3, max_distance=0.70):
+    """Return up to `n` PYQ candidates (best first) within max_distance.
+    Looser bound than pyq_lookup — these are CANDIDATES for a downstream
+    relevance filter (Haiku), not final picks. Each item has year/q_no/topic/
+    subject/score/document."""
+    try:
+        col = chroma_collection()
+        vec = embedder().encode([text]).tolist()
+        res = col.query(query_embeddings=vec, n_results=n,
+                        include=["metadatas", "distances", "documents"])
+        if not res["ids"] or not res["ids"][0]:
+            return []
+        out = []
+        for meta, dist, doc in zip(res["metadatas"][0], res["distances"][0],
+                                   res["documents"][0]):
+            if dist > max_distance:
+                continue
+            out.append({"distance": round(dist, 3), "score": round(1 - dist, 3),
+                        "topic": meta.get("topic"), "subject": meta.get("subject"),
+                        "year": meta.get("year"), "q_no": meta.get("q_no"),
+                        "document": doc})
+        return out
+    except Exception as e:
+        print(f"   ⚠ pyq_lookup_many failed: {e}")
+        return []
 
 # ── Misc ──────────────────────────────────────────────────────────────────────
 def log(msg=""):

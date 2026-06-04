@@ -170,40 +170,61 @@ def _build_tag_html(item):
         for t, bg, fg in tags)
     return f'<div class="tags">{spans}</div>'
 
-def find_linked_pyqs(en_items, threshold=0.45, max_n=3):
-    """For each EN main item, find the single best-matching prelims PYQ in ChromaDB.
-    Keep only matches with cosine similarity > threshold, max `max_n` total, one per item.
-    Returns [{item_idx, score, pyq(row from questions table)}] in news order."""
-    cands = []
+def _haiku_pyq_relevant(article_title, pyq_text, pyq_topic):
+    """Ask Claude Haiku whether a PYQ is genuinely relevant to the news story.
+    Returns True only on a YES. Any error → False (drop the candidate)."""
+    user = (f"News story topic: {article_title}\n"
+            f"PYQ question: {pyq_text}\n"
+            f"PYQ topic tag: {pyq_topic}\n\n"
+            "Is this PYQ genuinely relevant to the news story?\n"
+            "Answer only: YES or NO")
+    try:
+        ans = C.claude_text(
+            "You judge whether a past exam question is genuinely relevant to a news "
+            "story for an exam-prep daily. Reply with ONLY 'YES' or 'NO'.",
+            user, max_tokens=4, model=C.HAIKU_MODEL).strip().upper()
+        return ans.startswith("YES")
+    except Exception as e:
+        C.log(f"   ⚠ Haiku relevance check failed: {e}")
+        return False
+
+def find_linked_pyqs(en_items, candidate_max_distance=0.70, candidate_n=3, per_article=2):
+    """For each EN main item, pull top vector candidates from ChromaDB, then keep
+    only those a Claude Haiku relevance check confirms (YES). Max `per_article`
+    kept per item. Returns [{item_idx, score, pyq}] in news order; an empty list
+    means the PYQ section is skipped entirely."""
+    out = []
     for i, it in enumerate(en_items or []):
-        text = f"{(it.get('title') or '').replace('**', '')} {it.get('summary') or ''}".strip()
+        title = (it.get("title") or "").replace("**", "").strip()
+        text = f"{title} {it.get('summary') or ''}".strip()
         if not text:
             continue
-        m = C.pyq_lookup(text, n=1, max_distance=2.0)   # top match; we filter by score
-        score = (m.get("score") or 0) if m else 0
-        # DEBUG: surface why PYQs do/don't show
-        C.log(f"   PYQ search: {text[:80]}")
-        if m:
-            C.log(f"   Top match: {score:.3f} - RPSC RAS {m.get('year')} Q{m.get('q_no')} "
-                  f"(threshold {threshold})")
-        else:
-            C.log(f"   Top match: none (threshold {threshold})")
-        if m and score > threshold:
-            cands.append({"item_idx": i, "score": m["score"], "year": m["year"], "q_no": m["q_no"]})
-    cands.sort(key=lambda x: x["score"], reverse=True)   # best matches first
-    cands = cands[:max_n]                                  # cap at 3 (already one-per-item)
-    out = []
-    for c in cands:
-        try:
-            rows = C.sb_select("questions", params={
-                "year": f"eq.{c['year']}", "q_no": f"eq.{c['q_no']}", "limit": "1"})
-        except Exception as e:
-            C.log(f"   ⚠ PYQ fetch failed for {c['year']} Q{c['q_no']}: {e}")
-            rows = None
-        if rows:
-            out.append({"item_idx": c["item_idx"], "score": c["score"], "pyq": rows[0]})
-    out.sort(key=lambda x: x["item_idx"])                 # render in news order
-    return out
+        cands = C.pyq_lookup_many(text, n=candidate_n, max_distance=candidate_max_distance)
+        C.log(f"   PYQ search: {title[:70]}")
+        if not cands:
+            C.log(f"      → no vector candidates within {candidate_max_distance}")
+            continue
+        kept = 0
+        for c in cands:
+            if kept >= per_article:
+                break
+            try:
+                rows = C.sb_select("questions", params={
+                    "year": f"eq.{c['year']}", "q_no": f"eq.{c['q_no']}", "limit": "1"})
+            except Exception as e:
+                C.log(f"   ⚠ PYQ fetch failed for {c['year']} Q{c['q_no']}: {e}")
+                rows = None
+            if not rows:
+                continue
+            pyq = rows[0]
+            pyq_topic = " / ".join(p for p in (c.get("subject"), c.get("topic")) if p)
+            relevant = _haiku_pyq_relevant(title, pyq.get("question") or "", pyq_topic)
+            C.log(f"      cand RPSC RAS {c['year']} Q{c['q_no']} score={c['score']:.3f} "
+                  f"[{c.get('topic')}] → Haiku: {'YES' if relevant else 'NO'}")
+            if relevant:
+                out.append({"item_idx": i, "score": c["score"], "pyq": pyq})
+                kept += 1
+    return out   # already in news order (outer loop is item order)
 
 def render_pyq_section(linked_pyqs, lang, main_items, L):
     """Render the 'PYQs Linked to Today's News' block. Empty string if no matches.
