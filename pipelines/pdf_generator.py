@@ -52,6 +52,9 @@ ul { margin: 4px 0 5px 0; padding-left: 17px; }
 li { margin-bottom: 2px; }
 .static { font-size: 9pt; color: #2563eb; }
 .static b { color: #1e40af; }
+/* RPSC Angle — italic + smaller, set off from the key-fact bullets */
+.rpsc-angle { font-style: italic; font-size: 8.5pt; color: #6b21a8;
+              margin: 4px 0 5px; padding-left: 6px; border-left: 2px solid #c084fc; }
 .also h2, .sec h2 { font-size: 11.5pt; font-weight: 900; color: #11203a;
                     border-left: 4px solid #f4622a; padding-left: 7px;
                     margin: 14px 0 7px; text-transform: uppercase; letter-spacing:.04em; }
@@ -123,7 +126,7 @@ def _build_tag_html(item):
         for t, col in tags)
     return f'<div style="margin-top:3px;">{spans}</div>'
 
-def find_linked_pyqs(en_items, threshold=0.60, max_n=3):
+def find_linked_pyqs(en_items, threshold=0.45, max_n=3):
     """For each EN main item, find the single best-matching prelims PYQ in ChromaDB.
     Keep only matches with cosine similarity > threshold, max `max_n` total, one per item.
     Returns [{item_idx, score, pyq(row from questions table)}] in news order."""
@@ -215,6 +218,7 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
           <div class="summary">{esc(it.get('summary'))}</div>
           <div class="context">{esc(it.get('context'))}</div>
           <ul>{bullets}</ul>
+          {f'<div class="rpsc-angle">{L["rpsc_angle"]}: {esc(it.get("rpsc_angle"))}</div>' if it.get("rpsc_angle") else ""}
           <div class="static">&#8226; {L['static']}: <b>{esc(static_val)}</b></div>
           {tags_html}
         </div>""")
@@ -257,13 +261,15 @@ LABELS = {
            "connects": "Static connects today", "test": "Test yourself on today's CA",
            "test_sub": "Timed test • 5-8 questions • 1 min per question",
            "follow": "Follow PaperSe", "none": "No items today.",
-           "pyq_head": "PYQs Linked to Today's News", "from": "From", "answer": "Answer"},
+           "pyq_head": "PYQs Linked to Today's News", "from": "From", "answer": "Answer",
+           "rpsc_angle": "RPSC Angle"},
     "HI": {"daily": "डेली करेंट अफेयर्स", "sub": "RPSC RAS — परीक्षा-केंद्रित करेंट अफेयर्स",
            "static": "स्टैटिक कनेक्ट", "also": "अन्य प्रमुख समाचार",
            "connects": "आज के स्टैटिक कनेक्ट", "test": "आज के CA पर खुद को परखें",
            "test_sub": "टाइम्ड टेस्ट • 5-8 प्रश्न • प्रति प्रश्न 1 मिनट",
            "follow": "PaperSe को फॉलो करें", "none": "आज कोई आइटम नहीं।",
-           "pyq_head": "आज की खबरों से जुड़े PYQ", "from": "स्रोत", "answer": "उत्तर"},
+           "pyq_head": "आज की खबरों से जुड़े PYQ", "from": "स्रोत", "answer": "उत्तर",
+           "rpsc_angle": "RPSC कोण"},
 }
 
 def build_pdf(date, lang, linked_pyqs=None):

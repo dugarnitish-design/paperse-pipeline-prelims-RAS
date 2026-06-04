@@ -1028,31 +1028,70 @@ def score_item(item, cats):
 # ─────────────────────────────────────────────────────────────────────────────
 # CONTENT GENERATION (Claude)
 # ─────────────────────────────────────────────────────────────────────────────
-SYS_EN = (
-    "You are an RPSC RAS exam coach. Write current affairs for students "
-    "preparing for RPSC RAS Prelims.\n\n"
-    "Rules:\n"
-    "- Write like a coach, not journalist\n"
-    "- Every line must answer: 'What will RPSC test from this?'\n"
-    "- Context: max 2 lines explaining WHY this matters for RPSC RAS and "
-    "WHICH static chapter connects\n"
-    "- Bullets: only testable facts (names, numbers, dates, places)\n"
-    "- No storytelling or background filler\n"
-    "- No speculative statements\n"
-    "- Bold only: proper nouns, numbers, key terms RPSC will test\n"
-    "- Never write 'may', 'might', 'could', 'reportedly'")
-SYS_HI = (
-    "आप RPSC RAS परीक्षा कोच हैं। RPSC RAS प्रीलिम्स की तैयारी कर रहे छात्रों के लिए "
-    "करेंट अफेयर्स लिखें — ताज़ा हिंदी में मौलिक रूप से, अनुवाद नहीं।\n\n"
-    "नियम:\n"
-    "- पत्रकार की तरह नहीं, कोच की तरह लिखें\n"
-    "- हर पंक्ति यह उत्तर दे: 'RPSC इससे क्या पूछ सकता है?'\n"
-    "- संदर्भ: अधिकतम 2 पंक्तियाँ — RPSC RAS के लिए यह क्यों महत्वपूर्ण है और कौन-सा स्टैटिक अध्याय जुड़ता है\n"
-    "- बुलेट: केवल परीक्षा-योग्य तथ्य (नाम, संख्याएँ, तिथियाँ, स्थान)\n"
-    "- कोई कहानी या पृष्ठभूमि भराव नहीं\n"
-    "- कोई अनुमानित कथन नहीं\n"
-    "- बोल्ड केवल: व्यक्तिवाचक संज्ञा, संख्याएँ, मुख्य शब्द जो RPSC पूछेगा\n"
-    "- 'शायद', 'हो सकता है', 'कथित तौर पर' कभी न लिखें")
+SYS_EN = """
+You are an RPSC RAS exam coach
+writing daily current affairs
+for serious aspirants.
+
+STYLE RULES — strictly follow:
+1. Every sentence must answer:
+   "What will RPSC test from this?"
+2. Lead with the most testable fact
+   (name, number, rank, date, place)
+3. Bold all key facts using **bold**
+   (names, numbers, dates, places,
+   scheme names, article numbers)
+4. Use short crisp sentences.
+   Max 2 lines per point.
+5. Structure every item as:
+   WHAT happened (1 line)
+   KEY FACTS (2-3 bullet points
+   with bold facts)
+   RPSC ANGLE (1 line — what
+   could be asked)
+6. Never write like a journalist.
+   Never use: "In a major development"
+   "Sources said" "It is pertinent"
+   "Going forward" "In this regard"
+7. Word limit: 80-100 words per item
+
+EXAMPLE OUTPUT:
+**Venezuela's** Vice President
+**Delcy Rodriguez** visited India
+on **June 3, 2026**.
+
+Key Facts:
+- First VP-level visit since **2020**
+- Discussed **oil supply agreements**
+  and **CARICOM** trade framework
+- India-Venezuela trade:
+  **$2.1 billion** (2024-25)
+
+RPSC Angle: Questions on
+India-Latin America relations,
+NAM membership, oil diplomacy
+"""
+SYS_HI = """
+आप RPSC RAS परीक्षा के एक
+अनुभवी कोच हैं जो गंभीर
+अभ्यर्थियों के लिए दैनिक
+करेंट अफेयर्स लिख रहे हैं।
+
+शैली नियम:
+1. हर वाक्य का उत्तर हो:
+   "RPSC इससे क्या पूछेगा?"
+2. सबसे परीक्षा-योग्य तथ्य
+   पहले लिखें
+3. सभी महत्वपूर्ण तथ्य
+   **बोल्ड** करें
+4. संरचना:
+   क्या हुआ (1 पंक्ति)
+   मुख्य तथ्य (2-3 बुलेट)
+   RPSC कोण (1 पंक्ति)
+5. शब्द सीमा: 80-100 शब्द
+6. समाचार पत्र शैली नहीं
+   परीक्षा कोच शैली
+"""
 
 def gen_main(item, lang):
     sysmsg = SYS_EN if lang == "EN" else SYS_HI
@@ -1068,9 +1107,11 @@ def gen_main(item, lang):
             '"bullets": ["3-5 exam facts; wrap every key name/number/place in **double asterisks** '
             'e.g. \\"**NFHS-6** found **101** indicators in **Rajasthan**\\""], '
             '"static_connect": "short chapter name only, max 4 words, e.g. \\"Indian River System\\" or '
-            '\\"Constitutional Amendment\\" — no sentences"}')
+            '\\"Constitutional Amendment\\" — no sentences", '
+            '"rpsc_angle": "1 line — what RPSC could ask from this (topics/question hooks)"}')
     data, _ = C.claude_json(sysmsg, user, max_tokens=1000)
     data["bullets"] = data.get("bullets") or []
+    data["rpsc_angle"] = data.get("rpsc_angle") or ""
     return data
 
 def gen_also(item):
@@ -1245,10 +1286,12 @@ def main(news_date, label_date, dry_run=False):
 
         row_en = {**base, "language": "EN", "title": en.get("title"), "summary": en.get("summary"),
                   "context": en.get("context"), "bullets": en.get("bullets"),
-                  "static_connect": en.get("static_connect") or it.get("static_connect")}
+                  "static_connect": en.get("static_connect") or it.get("static_connect"),
+                  "rpsc_angle": en.get("rpsc_angle")}
         row_hi = {**base, "language": "HI", "title": hi.get("title"), "summary": hi.get("summary"),
                   "context": hi.get("context"), "bullets": hi.get("bullets"),
-                  "static_connect": hi.get("static_connect") or it.get("static_connect")}
+                  "static_connect": hi.get("static_connect") or it.get("static_connect"),
+                  "rpsc_angle": hi.get("rpsc_angle")}
         ins = C.sb_insert("daily_ca_items", [row_en, row_hi])
         # keep the EN row id as canonical "source item" for MCQs
         en_id = next((r["id"] for r in ins if r["language"] == "EN"), ins[0]["id"])
