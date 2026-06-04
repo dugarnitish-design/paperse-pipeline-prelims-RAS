@@ -161,7 +161,7 @@ def _build_tag_html(item):
     if item.get("topic_kb_never_skipped"):
         # spec: yellow background, bold, small
         tags.append(("Never skipped in 6 yrs", "#FEF08A", "#713F12"))
-    if item.get("topic_kb_trajectory") == "rising":
+    if str(item.get("topic_kb_trajectory") or "").upper() in ["RISING", "ACCELERATING"]:
         tags.append(("Rising trend", "#DBEAFE", "#1D4ED8"))
     if not tags:
         return ""
