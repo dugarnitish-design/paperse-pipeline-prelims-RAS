@@ -46,6 +46,11 @@ python3 pipelines/pdf_generator.py "$DATE"
 echo; echo ">>> STEP 5: curator_workflow.py  (save draft + send Telegram approval)"
 python3 pipelines/curator_workflow.py "$DATE"
 
+echo; echo ">>> STEP 6: pyq_poll_bot.py  (post 2 PYQ quiz polls to the channel)"
+# Best-effort: never blocks the chain. NOTE: per spec this sources stories from
+# $NEWS_DATE (yesterday's published CA); switch to "$DATE" to match today's PDF.
+python3 pipelines/pyq_poll_bot.py --date "$NEWS_DATE" || true
+
 echo; echo "###############################################################"
 echo "#  DONE — outputs/daily-ca/EN/$DATE.pdf  &  HI/$DATE.pdf"
 echo "#  ✓ Draft sent for approval via Telegram"
