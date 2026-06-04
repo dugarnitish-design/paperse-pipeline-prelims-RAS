@@ -12,6 +12,11 @@ NOTE on engine: the spec asks for reportlab, but reportlab cannot shape Devanaga
 Hindi via WeasyPrint (generate-pdf-hindi.py). So both PDFs are produced from one
 HTML/CSS template through WeasyPrint, which renders Devanagari + emoji + hyperlinks
 + a diagonal watermark correctly. Set via env so the homebrew libs are found.
+
+Hindi font: NotoSansDevanagari (bundled in ./fonts) is loaded via @font-face so the
+text layer is searchable/copyable (the old Apple .ttc fallback produced garbled,
+non-Unicode glyphs on copy/extract). This is environment-independent (works on
+Railway too) because the font ships in the repo.
 """
 import os
 os.environ.setdefault("DYLD_FALLBACK_LIBRARY_PATH",
@@ -22,60 +27,99 @@ from pipelines import _common as C
 from pipelines import rag_integration as rag
 
 TEST_URL = "https://paperse.in/test/{date}"
-# NOTE: colour emoji (SBIX) don't render in WeasyPrint/cairo on this box (no B/W
-# emoji font installed), so we use clean typographic markers instead of tofu boxes.
-# Install Noto Emoji and add it to the font stack to show literal emojis.
 SOCIAL = [("paperse.in", "https://paperse.in"),
           ("instagram.com/paperse.in", "https://instagram.com/paperse.in"),
           ("t.me/papersecivils", "https://t.me/papersecivils")]
 
-CSS = """
-@page { size: A4; margin: 14mm 13mm 16mm 13mm; }
-* { box-sizing: border-box; }
-body { font-family: 'Helvetica Neue', Arial, 'Noto Sans Devanagari', 'Kohinoor Devanagari', 'Apple Color Emoji', sans-serif;
-       color: #1f2937; font-size: 10.3pt; line-height: 1.5; }
-.hi { font-family: 'Noto Sans Devanagari','Kohinoor Devanagari','Devanagari Sangam MN','Apple Color Emoji', sans-serif; }
-.cat, .static, .cta { font-family: 'Helvetica Neue', Arial, 'Apple Color Emoji', 'Noto Sans Devanagari','Kohinoor Devanagari', sans-serif; }
-.watermark { position: fixed; top: 42%; left: 8%; transform: rotate(-35deg);
-             font-size: 60pt; color: rgba(244,98,42,0.06); font-weight: 800; z-index: -1; }
-.head { border-bottom: 3px solid #f4622a; padding-bottom: 7px; margin-bottom: 12px; }
-.head h1 { font-size: 18pt; margin: 0; color: #11203a; font-weight: 800; }
-.head .sub { font-size: 9pt; color: #6b7280; margin-top: 2px; }
-.item { margin-bottom: 13px; padding-bottom: 11px; border-bottom: 1px solid #eceef2; }
-.cat { font-size: 8.8pt; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
-       color: #f4622a; }
-.cat .dot { color: #f4622a; font-size: 7pt; vertical-align: middle; }
-.title { font-size: 12pt; font-weight: 800; color: #11203a; margin: 2px 0 3px; }
-.summary { font-weight: 600; color: #111827; }
-.context { color: #374151; margin: 3px 0 5px; }
-ul { margin: 4px 0 5px 0; padding-left: 17px; }
-li { margin-bottom: 2px; }
-.static { font-size: 9pt; color: #2563eb; }
-.static b { color: #1e40af; }
-/* RPSC Angle — italic + smaller, set off from the key-fact bullets */
-.rpsc-angle { font-style: italic; font-size: 8.5pt; color: #6b21a8;
-              margin: 4px 0 5px; padding-left: 6px; border-left: 2px solid #c084fc; }
-.also h2, .sec h2 { font-size: 11.5pt; font-weight: 900; color: #11203a;
-                    border-left: 4px solid #f4622a; padding-left: 7px;
-                    margin: 14px 0 7px; text-transform: uppercase; letter-spacing:.04em; }
-.also li { margin-bottom: 4px; }
-.also .t { font-weight: 700; }
-.connects { font-size: 9pt; color: #374151; background:#f8fafc; border:1px solid #e5e7eb;
-            border-radius:7px; padding:8px 10px; margin-top:10px; }
-.cta { margin-top: 11px; padding: 9px 11px; background:#fff7ed; border:1px solid #fed7aa;
-       border-radius:8px; font-size:9.4pt; }
-.cta a { color:#c2410c; font-weight:800; text-decoration:none; }
-.footer { margin-top: 12px; border-top: 2px solid #11203a; padding-top: 7px; text-align:center;
-          font-size: 9pt; }
-.footer a { color:#11203a; text-decoration:none; margin: 0 7px; }
-a { color:#2563eb; }
-.pyqitem { margin: 6px 0; }
-.pyqfrom { font-size: 8.3pt; font-weight:700; color:#f4622a; text-transform:uppercase; letter-spacing:.03em; margin-bottom:3px; }
-.pyqq { font-weight:700; color:#11203a; margin-bottom:4px; }
-.pyqopt { margin: 1px 0 1px 6px; color:#374151; font-size:9.6pt; }
-.pyqans { margin-top:4px; font-weight:700; color:#15803d; }
-.pyqsrc { font-size:8.3pt; color:#6b7280; margin-top:2px; }
-.pyqdiv { border:none; border-top:1px solid #e5e7eb; margin:8px 0; }
+# ── Category colour coding ──────────────────────────────────────────────────────
+# label text + left border of each article use the matched colour.
+DEFAULT_CAT_COLOR = "#11203a"
+def category_color(category):
+    c = (category or "").lower()
+    if "rajasthan" in c:                              return "#F57F17"  # amber
+    if "health" in c or "population" in c:            return "#2E7D32"  # green
+    if "sport" in c:                                  return "#6A1B9A"  # purple
+    if "book" in c:                                   return "#4E342E"  # brown
+    if "science" in c or "tech" in c:                 return "#00695C"  # teal
+    if "bill" in c or "legislation" in c or "law" in c:  return "#B71C1C"  # red
+    if "international" in c:                           return "#1565C0"  # blue
+    if "politic" in c or "election" in c or "polity" in c or "national" in c:
+        return "#E65100"  # orange (national politics)
+    return DEFAULT_CAT_COLOR
+
+# ── Stylesheet (interpolates bundled font paths + running-footer date) ──────────
+def build_css(pretty_date):
+    reg  = (C.ROOT / "fonts" / "NotoSansDevanagari-Regular.ttf").as_uri()
+    bold = (C.ROOT / "fonts" / "NotoSansDevanagari-Bold.ttf").as_uri()
+    return f"""
+@font-face {{ font-family:'NotoDeva'; src:url('{reg}'); font-weight:normal; font-style:normal; }}
+@font-face {{ font-family:'NotoDeva'; src:url('{bold}'); font-weight:bold;  font-style:normal; }}
+
+@page {{
+  size: A4;
+  margin: 20mm;
+  @bottom-left   {{ content:"paperse.in"; font-family:'Helvetica Neue',Arial,sans-serif; font-size:8pt; color:#9ca3af; }}
+  @bottom-center {{ content:"{pretty_date}"; font-family:'Helvetica Neue',Arial,sans-serif; font-size:8pt; color:#9ca3af; }}
+  @bottom-right  {{ content:"Page " counter(page); font-family:'Helvetica Neue',Arial,sans-serif; font-size:8pt; color:#9ca3af; }}
+}}
+* {{ box-sizing:border-box; }}
+html, body {{ background:#ffffff; }}
+body {{ max-width:170mm; margin:0; color:#1f2937; font-size:13px; line-height:1.6;
+        font-family:'Helvetica Neue', Arial, sans-serif; }}
+body.hi, .hi {{ font-family:'NotoDeva','Noto Sans Devanagari', sans-serif; }}
+
+.watermark {{ position:fixed; top:42%; left:8%; transform:rotate(-35deg);
+              font-size:60pt; color:rgba(244,98,42,0.05); font-weight:800; z-index:-1; }}
+
+.head {{ border-bottom:3px solid #f4622a; padding-bottom:8px; margin-bottom:16px; }}
+.head h1 {{ font-size:28px; margin:0; color:#000000; font-weight:700; letter-spacing:-0.01em; }}
+.head .sub {{ font-size:11px; color:#6b7280; margin-top:3px; }}
+
+.item {{ border-left:4px solid {DEFAULT_CAT_COLOR}; padding-left:16px; margin-bottom:24px; }}
+.cat {{ font-size:10px; font-weight:800; letter-spacing:0.12em; text-transform:uppercase;
+        color:{DEFAULT_CAT_COLOR}; margin-bottom:3px; }}
+.title {{ font-size:18px; font-weight:700; color:#1a1a1a; margin:2px 0 4px; line-height:1.25; }}
+.summary {{ font-size:14px; font-weight:600; font-style:italic; color:#4b5563; margin-bottom:4px; }}
+.context {{ font-size:13px; color:#1f2937; line-height:1.6; margin:0 0 6px; }}
+ul {{ margin:5px 0 6px 0; padding-left:18px; }}
+li {{ font-size:13px; color:#1f2937; margin-bottom:3px; line-height:1.5; }}
+li b, li strong {{ color:#000000; font-weight:700; }}
+
+.rpsc-angle {{ background:#F3E5F5; border-left:3px solid #7B1FA2; padding:8px 12px;
+               font-size:12px; font-style:italic; color:#6A1B9A; margin:6px 0; border-radius:0 4px 4px 0; }}
+
+.static {{ font-size:12px; color:#6b7280; font-variant:small-caps; letter-spacing:0.03em; margin-top:5px; }}
+.static b {{ color:#374151; }}
+
+.tags {{ margin-top:6px; }}
+.badge {{ display:inline-block; font-size:8.5px; font-weight:700; padding:2px 7px;
+          border-radius:3px; margin-right:5px; }}
+
+.also h2, .sec h2 {{ font-size:13px; font-weight:800; color:#11203a; border-left:4px solid #f4622a;
+                     padding-left:8px; margin:18px 0 9px; text-transform:uppercase; letter-spacing:.04em; }}
+.also li {{ font-size:12.5px; margin-bottom:5px; color:#374151; }}
+.also .t {{ font-weight:700; color:#1a1a1a; }}
+
+.pyqbox {{ background:#f3f4f6; border:1px solid #e5e7eb; border-radius:8px; padding:12px 14px; }}
+.pyqitem {{ margin:2px 0 8px; }}
+.pyqfrom {{ font-size:8.5px; font-weight:700; color:#f4622a; text-transform:uppercase;
+            letter-spacing:.03em; margin-bottom:4px; }}
+.pyqq {{ font-size:12.5px; font-weight:700; color:#11203a; margin-bottom:5px; }}
+.pyqopt {{ font-size:12px; margin:1px 0 1px 6px; color:#374151; }}
+.pyqans {{ font-size:12px; margin-top:5px; font-weight:700; color:#15803d; }}
+.yearbadge {{ float:right; background:#11203a; color:#ffffff; font-size:8.5px; font-weight:700;
+              padding:2px 9px; border-radius:10px; margin-left:8px; }}
+.pyqsrc {{ font-size:8.3px; color:#6b7280; margin-top:2px; }}
+.pyqdiv {{ border:none; border-top:1px solid #e5e7eb; margin:8px 0; }}
+
+.connects {{ font-size:12px; color:#374151; background:#f8fafc; border:1px solid #e5e7eb;
+             border-radius:7px; padding:8px 10px; margin-top:12px; }}
+.cta {{ margin-top:12px; padding:10px 12px; background:#fff7ed; border:1px solid #fed7aa;
+        border-radius:8px; font-size:12px; }}
+.cta a {{ color:#c2410c; font-weight:800; text-decoration:none; }}
+.footer {{ margin-top:14px; border-top:2px solid #11203a; padding-top:8px; text-align:center; font-size:12px; }}
+.footer a {{ color:#11203a; text-decoration:none; margin:0 7px; }}
+a {{ color:#2563eb; }}
 """
 
 import re as _re
@@ -110,21 +154,21 @@ def _build_tag_html(item):
             m = C.pyq_lookup(text, n=1, max_distance=0.35)
             if m:
                 item["pyq_match_year"] = m.get("year")
-    # --- build HTML ---
+    # --- build HTML (badge = bg colour, text colour) ---
     tags = []
     if item.get("pyq_match_year"):
-        tags.append(("&#127919; RPSC " + str(item["pyq_match_year"]), "#c2410c"))
+        tags.append((f"RPSC {item['pyq_match_year']}", "#FFE0B2", "#9A3412"))
     if item.get("topic_kb_never_skipped"):
-        tags.append(("&#9889; Never skipped in 6 yrs", "#15803d"))
+        # spec: yellow background, bold, small
+        tags.append(("Never skipped in 6 yrs", "#FEF08A", "#713F12"))
     if item.get("topic_kb_trajectory") == "rising":
-        tags.append(("&#128200; Rising trend", "#1d4ed8"))
+        tags.append(("Rising trend", "#DBEAFE", "#1D4ED8"))
     if not tags:
         return ""
     spans = "".join(
-        f'<span style="background:{col};color:white;padding:1px 6px;border-radius:3px;'
-        f'font-size:8pt;margin-right:5px;">{t}</span>'
-        for t, col in tags)
-    return f'<div style="margin-top:3px;">{spans}</div>'
+        f'<span class="badge" style="background:{bg};color:{fg};">{t}</span>'
+        for t, bg, fg in tags)
+    return f'<div class="tags">{spans}</div>'
 
 def find_linked_pyqs(en_items, threshold=0.45, max_n=3):
     """For each EN main item, find the single best-matching prelims PYQ in ChromaDB.
@@ -162,7 +206,8 @@ def find_linked_pyqs(en_items, threshold=0.45, max_n=3):
     return out
 
 def render_pyq_section(linked_pyqs, lang, main_items, L):
-    """Render the '📝 PYQs Linked to Today's News' block. Empty string if no matches."""
+    """Render the 'PYQs Linked to Today's News' block. Empty string if no matches.
+    Each Q is in a light-grey box with a year badge floated to the right."""
     if not linked_pyqs:
         return ""
     is_hi = (lang == "HI")
@@ -187,14 +232,15 @@ def render_pyq_section(linked_pyqs, lang, main_items, L):
             mark = " &#10003;" if is_corr else ""        # ✓ green check
             style = "color:#15803d; font-weight:700;" if is_corr else ""
             opt_html += f'<div class="pyqopt" style="{style}">({let}) {esc(txt)}{mark}</div>'
+        year_badge = f'<span class="yearbadge">RPSC RAS {esc(q.get("year"))}</span>'
         from_html = f'<div class="pyqfrom">{L["from"]}: {esc(headline)}</div>' if headline else ""
         ans_html = f'<div class="pyqans">{L["answer"]}: ({corr_let}) {esc(corr_text)}</div>'
-        src_html = f'<div class="pyqsrc">&#8212; RPSC RAS {esc(q.get("year"))}</div>'
         div = "" if k == len(linked_pyqs) - 1 else '<hr class="pyqdiv">'
         blocks.append(
-            f'<div class="pyqitem">{from_html}'
-            f'<div class="pyqq">{esc(qtext)}</div>{opt_html}{ans_html}{src_html}</div>{div}')
-    return f'<div class="sec"><h2>&#9998; {L["pyq_head"]}</h2>{"".join(blocks)}</div>'
+            f'<div class="pyqitem">{year_badge}{from_html}'
+            f'<div class="pyqq">{esc(qtext)}</div>{opt_html}{ans_html}</div>{div}')
+    return (f'<div class="sec"><h2>{L["pyq_head"]}</h2>'
+            f'<div class="pyqbox">{"".join(blocks)}</div></div>')
 
 def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
     ds = date.isoformat()
@@ -202,7 +248,8 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
     L = labels
     items_html = []
     for it in main_items:
-        # Bullets: **text** → <b>text</b>
+        color = category_color(it.get("category"))
+        # Bullets: **text** → <b>text</b> (key names/numbers/dates rendered bold black)
         bullets = "".join(f"<li>{md_bold(b)}</li>" for b in (it.get("bullets") or []))
 
         # RAG tags (from item attributes set during enrichment, or live topic_kb lookup)
@@ -211,15 +258,20 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
         # Static connect: just the chapter name (Claude now returns short form)
         static_val = (it.get("static_connect") or "").split("—")[0].split(":")[0].strip()
 
+        rpsc_html = (f'<div class="rpsc-angle">{L["rpsc_angle"]}: {esc(it.get("rpsc_angle"))}</div>'
+                     if it.get("rpsc_angle") else "")
+        static_html = (f'<div class="static">{L["static"]}: <b>{esc(static_val)}</b></div>'
+                       if static_val else "")
+
         items_html.append(f"""
-        <div class="item">
-          <div class="cat"><span class="dot">&#8226;</span> {esc(it.get('category'))}</div>
+        <div class="item" style="border-left-color:{color};">
+          <div class="cat" style="color:{color};">{esc(it.get('category'))}</div>
           <div class="title">{esc(it.get('title')).replace('**','')}</div>
           <div class="summary">{esc(it.get('summary'))}</div>
           <div class="context">{esc(it.get('context'))}</div>
           <ul>{bullets}</ul>
-          {f'<div class="rpsc-angle">{L["rpsc_angle"]}: {esc(it.get("rpsc_angle"))}</div>' if it.get("rpsc_angle") else ""}
-          <div class="static">&#8226; {L['static']}: <b>{esc(static_val)}</b></div>
+          {rpsc_html}
+          {static_html}
           {tags_html}
         </div>""")
 
@@ -233,14 +285,15 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
     connects = [it.get("static_connect") for it in main_items if it.get("static_connect")]
     connects_html = ""
     if connects:
-        connects_html = (f"<div class='connects'>&#8226; <b>{L['connects']}:</b> "
+        connects_html = (f"<div class='connects'><b>{L['connects']}:</b> "
                          + " · ".join(esc(c) for c in connects) + "</div>")
 
     pyq_html = render_pyq_section(linked_pyqs or [], lang, main_items, L)
 
     social = " ".join(f"<a href='{u}'>{esc(t)}</a>" for t, u in SOCIAL)
     body_cls = "hi" if lang == "HI" else "en"
-    return f"""<!doctype html><html><head><meta charset="utf-8"><style>{CSS}</style></head>
+    css = build_css(pretty)
+    return f"""<!doctype html><html><head><meta charset="utf-8"><style>{css}</style></head>
 <body class="{body_cls}">
   <div class="watermark">paperse.in</div>
   <div class="head"><h1>PaperSe {L['daily']} — {pretty}</h1>
@@ -249,7 +302,7 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
   {also_html}
   {pyq_html}
   {connects_html}
-  <div class="cta">&#9998; <b>{L['test']}</b> &nbsp;
+  <div class="cta"><b>{L['test']}</b> &nbsp;
      <a href="{TEST_URL.format(date=ds)}">paperse.in/test/{ds}</a><br>
      {L['test_sub']}</div>
   <div class="footer"><b>{L['follow']}</b><br>{social}</div>

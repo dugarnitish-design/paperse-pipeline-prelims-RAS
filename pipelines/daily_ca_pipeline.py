@@ -1029,6 +1029,21 @@ def score_item(item, cats):
 # CONTENT GENERATION (Claude)
 # ─────────────────────────────────────────────────────────────────────────────
 SYS_EN = """
+CRITICAL ACCURACY RULES:
+1. ONLY use facts explicitly stated
+   in the source article provided.
+   Never extrapolate, assume, or
+   add context from training data.
+2. For dates — only use dates
+   that appear in the source text.
+   Never guess or infer dates.
+3. If a fact is not in the source,
+   do not include it.
+   Write "details awaited" instead.
+4. Numbers, names, dates must be
+   copied exactly from source.
+   No paraphrasing of factual data.
+
 You are an RPSC RAS exam coach
 writing daily current affairs
 for serious aspirants.
@@ -1072,6 +1087,21 @@ India-Latin America relations,
 NAM membership, oil diplomacy
 """
 SYS_HI = """
+CRITICAL ACCURACY RULES:
+1. ONLY use facts explicitly stated
+   in the source article provided.
+   Never extrapolate, assume, or
+   add context from training data.
+2. For dates — only use dates
+   that appear in the source text.
+   Never guess or infer dates.
+3. If a fact is not in the source,
+   do not include it.
+   Write "details awaited" instead.
+4. Numbers, names, dates must be
+   copied exactly from source.
+   No paraphrasing of factual data.
+
 आप RPSC RAS परीक्षा के एक
 अनुभवी कोच हैं जो गंभीर
 अभ्यर्थियों के लिए दैनिक
