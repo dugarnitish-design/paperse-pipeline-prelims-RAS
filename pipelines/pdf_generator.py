@@ -314,14 +314,14 @@ LABELS = {
            "connects": "Static connects today", "test": "Test yourself on today's CA",
            "test_sub": "Timed test • 5-8 questions • 1 min per question",
            "follow": "Follow PaperSe", "none": "No items today.",
-           "pyq_head": "PYQs Linked to Today's News", "from": "From", "answer": "Answer",
+           "pyq_head": "&#9998; PYQ of the Day", "from": "From", "answer": "Answer",
            "rpsc_angle": "RPSC Angle"},
     "HI": {"daily": "डेली करेंट अफेयर्स", "sub": "RPSC RAS — परीक्षा-केंद्रित करेंट अफेयर्स",
            "static": "स्टैटिक कनेक्ट", "also": "अन्य प्रमुख समाचार",
            "connects": "आज के स्टैटिक कनेक्ट", "test": "आज के CA पर खुद को परखें",
            "test_sub": "टाइम्ड टेस्ट • 5-8 प्रश्न • प्रति प्रश्न 1 मिनट",
            "follow": "PaperSe को फॉलो करें", "none": "आज कोई आइटम नहीं।",
-           "pyq_head": "आज की खबरों से जुड़े PYQ", "from": "स्रोत", "answer": "उत्तर",
+           "pyq_head": "&#9998; आज का PYQ", "from": "स्रोत", "answer": "उत्तर",
            "rpsc_angle": "RPSC कोण"},
 }
 
