@@ -15,6 +15,12 @@ inputs/ie_ocr_cache/
 __pycache__/
 *.pyc
 
+# ── ChromaDB vector store ───────────────────────────────────────────────
+# The committed copy stays in the repo (Railway needs it for the RAG step);
+# this entry just stops NEW/regenerated chroma files from being added, and the
+# sqlite is skip-worktree'd locally so read-only access isn't flagged as a change.
+chroma_db/
+
 # Local session / handoff docs (may contain notes & passwords)
 .claude/
 HANDOFF.md
