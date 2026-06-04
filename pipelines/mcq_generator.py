@@ -60,10 +60,21 @@ def main(date):
         return None
     C.log(f"   {len(items)} main items today")
 
-    # plan counts
-    per = [(it, richness(it)) for it in items]
-    total = sum(n for _, n in per)
-    total = max(min(total, 8), 1)             # cap 8; never pad beyond items' richness
+    # plan counts — GUARANTEE >=1 MCQ per main item, then give extra slots to the
+    # richer items up to the cap of 8. (Previously front-loaded 2-per-item, which
+    # starved the last item once the cap was hit — e.g. a newly-swapped #5.)
+    n_items = len(items)
+    cap = min(max(sum(richness(it) for it in items), n_items), 8)
+    alloc = [1] * n_items                      # one each first
+    extra = cap - n_items
+    for i, it in enumerate(items):
+        if extra <= 0:
+            break
+        if richness(it) >= 2:
+            alloc[i] += 1
+            extra -= 1
+    per = list(zip(items, alloc))
+    total = sum(alloc)
     type_seq = plan_types(total)
     C.log(f"   Generating {total} MCQs · type plan: "
           f"{ {t: type_seq.count(t) for t in TYPES} }")
