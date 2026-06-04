@@ -824,6 +824,28 @@ def _is_recent_duplicate(item, recent_tok_sets, threshold=0.55):
     return False
 
 
+def _dedupe_same_batch(items, threshold=0.8):
+    """Remove same-story duplicates WITHIN one batch (e.g. PIB posts the same
+    release twice — NCRPB scheme, Price Stabilization, highway widening). Compares
+    title token sets (Jaccard >= threshold) and keeps the HIGHEST-priority copy.
+    Distinct items that merely share boilerplate ("Cabinet approves …") stay,
+    because their place/scheme tokens drop the overlap below the threshold."""
+    kept, sigs = [], []
+    for it in sorted(items, key=lambda x: x.get("priority", 0), reverse=True):
+        toks = tokenize(it.get("title") or "")
+        dup = False
+        for ks in sigs:
+            if toks and ks:
+                union = len(toks | ks)
+                if union and len(toks & ks) / union >= threshold:
+                    dup = True
+                    break
+        if not dup:
+            sigs.append(toks)
+            kept.append(it)
+    return kept
+
+
 def run_filters(item, cats):
     """5-filter chain. Returns enriched item or None (rejected)."""
     # FILTER 0 — strict recency. Reject anything published before (today - 2 days).
@@ -1105,6 +1127,14 @@ def main(news_date, label_date, dry_run=False):
     cats = load_categories()
     scored = [score_item(it, cats) for it in deduped]
     scored.sort(key=lambda x: x.get("priority", 0), reverse=True)   # best-first for the call cap
+
+    # ── SAME-BATCH DEDUP — drop same-story duplicates posted twice in one batch
+    #    (e.g. PIB double-posts); keep the highest-scored copy. Runs before Layer 3
+    #    so we never spend a Claude call on a duplicate. ───────────────────────
+    pre_batch = len(scored)
+    scored = _dedupe_same_batch(scored)
+    C.log(f"\n[2d] SAME-BATCH DEDUP → removed {pre_batch - len(scored)} duplicate(s); "
+          f"{len(scored)} remain")
 
     # ── LAYER 3 — RPSC RELEVANCE (Claude Sonnet, ≤ MAX_CALLS/day) ─────────────
     C.log(f"\n[3] LAYER 3 — RPSC RELEVANCE (Claude, cap {RPSC.MAX_CALLS}/day)")

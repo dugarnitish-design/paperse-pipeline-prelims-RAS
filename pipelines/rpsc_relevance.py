@@ -21,8 +21,10 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from pipelines import _common as C
 
 MAX_CALLS = 85          # hard cap on Claude calls per run (cost guard)
-# Haiku is sufficient for a YES/NO/MAYBE classification (3x cheaper than Sonnet).
-MODEL = C.ENV.get("RPSC_MODEL", "claude-haiku-4-5")
+# Sonnet for this layer: quality over cost. Haiku was too aggressive — it rejected
+# legitimate RPSC stories (Venezuela visit, NEET) on over-literal reasoning. Default
+# is the committed choice (reliable on Railway); override with RPSC_MODEL if needed.
+MODEL = C.ENV.get("RPSC_MODEL", "claude-sonnet-4-20250514")
 KEEP_VERDICTS = {"YES", "MAYBE"}   # NO is dropped
 
 SYSTEM_PROMPT = """You are an RPSC RAS Prelims 2026 exam pattern expert.
