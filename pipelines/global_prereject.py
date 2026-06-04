@@ -113,6 +113,14 @@ def _rule_party_internal(low, toks):
                 "exit plan on hold")
 
 
+def _rule_lowvalue_sports_study(low, toks):
+    # Low-RPSC-value "study/profile of a cricketer" filler (e.g. IIM study on a
+    # teen cricket phenom) — not a testable CA event.
+    return _has(low, "iim study on", "cricket study", "study on cricketer",
+                "study on vaibhav", "sooryavanshi", "vaibhav suryavanshi",
+                "vaibhav sooryavanshi")
+
+
 def _rule_ceremonial(low, toks):
     return _has(low, "interacts with", "student delegation", "cycling ride",
                 "bicycle day", "walkathon", "pays tribute", "pays homage",
@@ -129,6 +137,7 @@ RULES = [
     ("incident-no-policy",   _rule_incident),
     ("corporate-m&a",        _rule_corporate),
     ("party-internal",       _rule_party_internal),
+    ("lowvalue-sports-study", _rule_lowvalue_sports_study),
     ("ceremonial-no-data",   _rule_ceremonial),
 ]
 
