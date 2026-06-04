@@ -1071,20 +1071,21 @@ STYLE RULES — strictly follow:
 7. Word limit: 80-100 words per item
 
 EXAMPLE OUTPUT:
-**Venezuela's** Vice President
+Venezuela's Acting President
 **Delcy Rodriguez** visited India
 on **June 3, 2026**.
 
 Key Facts:
-- First VP-level visit since **2020**
-- Discussed **oil supply agreements**
-  and **CARICOM** trade framework
-- India-Venezuela trade:
-  **$2.1 billion** (2024-25)
+- 5-day working visit (June 3-7)
+- To meet **PM Modi**
+- MEA recognises her as
+  'Acting President'
+- Visit linked to **Big Cats
+  Alliance** summit
 
-RPSC Angle: Questions on
-India-Latin America relations,
-NAM membership, oil diplomacy
+RPSC Angle: India-Latin America
+relations, bilateral diplomacy,
+recognition of governments
 """
 SYS_HI = """
 CRITICAL ACCURACY RULES:

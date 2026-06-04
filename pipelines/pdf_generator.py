@@ -64,60 +64,60 @@ def build_css(pretty_date):
 }}
 * {{ box-sizing:border-box; }}
 html, body {{ background:#ffffff; }}
-body {{ max-width:170mm; margin:0; color:#1f2937; font-size:13px; line-height:1.6;
+body {{ max-width:170mm; margin:0; color:#1f2937; font-size:12px; line-height:1.4;
         font-family:'Helvetica Neue', Arial, sans-serif; }}
 body.hi, .hi {{ font-family:'NotoDeva','Noto Sans Devanagari', sans-serif; }}
 
 .watermark {{ position:fixed; top:42%; left:8%; transform:rotate(-35deg);
               font-size:60pt; color:rgba(244,98,42,0.05); font-weight:800; z-index:-1; }}
 
-.head {{ border-bottom:3px solid #f4622a; padding-bottom:8px; margin-bottom:16px; }}
+.head {{ border-bottom:3px solid #f4622a; padding-bottom:8px; margin-bottom:8px; }}
 .head h1 {{ font-size:28px; margin:0; color:#000000; font-weight:700; letter-spacing:-0.01em; }}
 .head .sub {{ font-size:11px; color:#6b7280; margin-top:3px; }}
 
-.item {{ border-left:4px solid {DEFAULT_CAT_COLOR}; padding-left:16px; margin-bottom:24px; }}
+.item {{ border-left:4px solid {DEFAULT_CAT_COLOR}; padding-left:12px; margin-bottom:12px; }}
 .cat {{ font-size:10px; font-weight:800; letter-spacing:0.12em; text-transform:uppercase;
         color:{DEFAULT_CAT_COLOR}; margin-bottom:3px; }}
-.title {{ font-size:18px; font-weight:700; color:#1a1a1a; margin:2px 0 4px; line-height:1.25; }}
-.summary {{ font-size:14px; font-weight:600; font-style:italic; color:#4b5563; margin-bottom:4px; }}
-.context {{ font-size:13px; color:#1f2937; line-height:1.6; margin:0 0 6px; }}
-ul {{ margin:5px 0 6px 0; padding-left:18px; }}
-li {{ font-size:13px; color:#1f2937; margin-bottom:3px; line-height:1.5; }}
+.title {{ font-size:18px; font-weight:700; color:#1a1a1a; margin:1px 0 2px; line-height:1.2; }}
+.summary {{ font-size:14px; font-weight:600; font-style:italic; color:#4b5563; margin-bottom:2px; }}
+.context {{ font-size:12px; color:#1f2937; line-height:1.4; margin:0 0 3px; }}
+ul {{ margin:4px 0 5px 0; padding-left:18px; }}
+li {{ font-size:12px; color:#1f2937; margin-bottom:2px; line-height:1.4; }}
 li b, li strong {{ color:#000000; font-weight:700; }}
 
-.rpsc-angle {{ background:#F3E5F5; border-left:3px solid #7B1FA2; padding:8px 12px;
-               font-size:12px; font-style:italic; color:#6A1B9A; margin:6px 0; border-radius:0 4px 4px 0; }}
+.rpsc-angle {{ background:#F3E5F5; border-left:3px solid #7B1FA2; padding:5px 10px;
+               font-size:12px; font-style:italic; color:#6A1B9A; margin:4px 0; border-radius:0 4px 4px 0; }}
 
-.static {{ font-size:12px; color:#6b7280; font-variant:small-caps; letter-spacing:0.03em; margin-top:5px; }}
+.static {{ font-size:12px; color:#6b7280; font-variant:small-caps; letter-spacing:0.03em; margin-top:3px; }}
 .static b {{ color:#374151; }}
 
-.tags {{ margin-top:6px; }}
+.tags {{ margin-top:4px; }}
 .badge {{ display:inline-block; font-size:8.5px; font-weight:700; padding:2px 7px;
           border-radius:3px; margin-right:5px; }}
 
 .also h2, .sec h2 {{ font-size:13px; font-weight:800; color:#11203a; border-left:4px solid #f4622a;
-                     padding-left:8px; margin:18px 0 9px; text-transform:uppercase; letter-spacing:.04em; }}
-.also li {{ font-size:12.5px; margin-bottom:5px; color:#374151; }}
+                     padding-left:8px; margin:8px 0 6px; text-transform:uppercase; letter-spacing:.04em; }}
+.also li {{ font-size:12.5px; margin-bottom:3px; color:#374151; }}
 .also .t {{ font-weight:700; color:#1a1a1a; }}
 
-.pyqbox {{ background:#f3f4f6; border:1px solid #e5e7eb; border-radius:8px; padding:12px 14px; }}
-.pyqitem {{ margin:2px 0 8px; }}
+.pyqbox {{ background:#f3f4f6; border:1px solid #e5e7eb; border-radius:8px; padding:7px 10px; }}
+.pyqitem {{ margin:1px 0 4px; }}
 .pyqfrom {{ font-size:8.5px; font-weight:700; color:#f4622a; text-transform:uppercase;
-            letter-spacing:.03em; margin-bottom:4px; }}
-.pyqq {{ font-size:12.5px; font-weight:700; color:#11203a; margin-bottom:5px; }}
-.pyqopt {{ font-size:12px; margin:1px 0 1px 6px; color:#374151; }}
-.pyqans {{ font-size:12px; margin-top:5px; font-weight:700; color:#15803d; }}
+            letter-spacing:.03em; margin-bottom:2px; }}
+.pyqq {{ font-size:12.5px; font-weight:700; color:#11203a; margin-bottom:3px; }}
+.pyqopt {{ font-size:12px; margin:0 0 0 6px; color:#374151; }}
+.pyqans {{ font-size:12px; margin-top:3px; font-weight:700; color:#15803d; }}
 .yearbadge {{ float:right; background:#11203a; color:#ffffff; font-size:8.5px; font-weight:700;
               padding:2px 9px; border-radius:10px; margin-left:8px; }}
 .pyqsrc {{ font-size:8.3px; color:#6b7280; margin-top:2px; }}
-.pyqdiv {{ border:none; border-top:1px solid #e5e7eb; margin:8px 0; }}
+.pyqdiv {{ border:none; border-top:1px solid #e5e7eb; margin:5px 0; }}
 
 .connects {{ font-size:12px; color:#374151; background:#f8fafc; border:1px solid #e5e7eb;
-             border-radius:7px; padding:8px 10px; margin-top:12px; }}
-.cta {{ margin-top:12px; padding:10px 12px; background:#fff7ed; border:1px solid #fed7aa;
+             border-radius:7px; padding:6px 10px; margin-top:8px; }}
+.cta {{ margin-top:8px; padding:7px 11px; background:#fff7ed; border:1px solid #fed7aa;
         border-radius:8px; font-size:12px; }}
 .cta a {{ color:#c2410c; font-weight:800; text-decoration:none; }}
-.footer {{ margin-top:14px; border-top:2px solid #11203a; padding-top:8px; text-align:center; font-size:12px; }}
+.footer {{ margin-top:9px; border-top:2px solid #11203a; padding-top:7px; text-align:center; font-size:12px; }}
 .footer a {{ color:#11203a; text-decoration:none; margin:0 7px; }}
 a {{ color:#2563eb; }}
 """
