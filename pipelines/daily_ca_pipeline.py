@@ -528,14 +528,18 @@ def _pib_cache_path(date):
 
 
 def fetch_pib(date):
-    """Source 1 — PIB. Fetch releases for the given date.
-    Strategy:
+    """Source 1 — PIB. Real National/English press releases for `date`.
+
+    The release list is JS / ASP.NET-postback rendered behind an Akamai bot wall,
+    so the actual scrape lives in pipelines/pib_scraper.py (headed Playwright —
+    see that module's docstring for why headless / plain-requests don't work).
+    Here we keep the cache scaffolding:
       1. Serve from local JSON cache if ≥15 items already saved for this date.
-      2. Fetch live with date filter (works reliably in the morning).
-      3. If live returns <15 (page has rotated by evening), fall back to unfiltered.
-      4. Save whatever we got to cache for future re-runs.
-    PIB's rolling page typically rotates older releases off by late afternoon."""
+      2. Otherwise scrape live via pib_scraper.scrape_pib(date).
+      3. Save the result to cache (≥15 items) so future back-fills reuse it — the
+         live page exposes a given date only briefly before it rotates off."""
     import json as _json
+    from pipelines import pib_scraper
 
     cache_file = _pib_cache_path(date)
 
@@ -549,45 +553,13 @@ def fetch_pib(date):
         except Exception:
             pass
 
-    # 2 — fetch live
-    import requests
-    from bs4 import BeautifulSoup
+    # 2 — scrape live (headed Playwright + Akamai warm-up; see pib_scraper)
+    items = pib_scraper.scrape_pib(date)
 
-    SKIP = {"ministry", "department", "telephone", "tenders", "privacy",
-            "copyright", "policy", "hyperlink", "accessibility", "sitemap"}
-
-    def _scrape(url):
-        r = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0 PaperSe/1.0"})
-        r.raise_for_status()
-        soup = BeautifulSoup(r.text, "html.parser")
-        seen, out = set(), []
-        for a in soup.find_all("a"):
-            txt = " ".join(a.get_text(" ", strip=True).split())
-            if len(txt) < 30 or txt in seen:
-                continue
-            if any(s in txt.lower() for s in SKIP):
-                continue
-            seen.add(txt)
-            out.append({"source": "PIB", "title": txt, "text": txt, "url": url})
-        return out[:150]
-
-    items = []
-    try:
-        date_str = date.strftime("%d-%m-%Y")
-        items = _scrape(
-            f"https://pib.gov.in/Allrel.aspx?reg=3&lang=1"
-            f"&dtFromDate={date_str}&dtToDate={date_str}")
-        # 3 — fallback: unfiltered page if date-filtered result is too thin
-        if len(items) < 15:
-            C.log(f"   PIB date-filter thin ({len(items)}); trying unfiltered page…")
-            items = _scrape("https://pib.gov.in/Allrel.aspx?reg=3&lang=1")
-    except Exception as e:
-        C.log(f"   ⚠ PIB fetch failed: {e}")
-
-    # 4 — cache if we got something useful
+    # 3 — cache if we got something useful
     if len(items) >= 15:
         try:
-            cache_file.write_text(_json.dumps(items))
+            cache_file.write_text(_json.dumps(items, ensure_ascii=False))
         except Exception:
             pass
 
@@ -698,6 +670,11 @@ def load_categories():
         for phrase in (c.get("what_to_ignore") or []):
             ign |= tokenize(phrase)
         c["_ignore_kw"] = ign
+        # Ignore PHRASES (lowercased) for word-boundary matching — precise, so a
+        # distinctive fragment like "round 2" rejects on its own, while generic
+        # single tokens ("foreign", "president") no longer cause false rejects.
+        c["_ignore_phrases"] = [p.lower().strip()
+                                for p in (c.get("what_to_ignore") or []) if p and p.strip()]
     C.log(f"   Loaded {len(cats)} CA categories from ca_categories")
     return cats
 
@@ -764,6 +741,20 @@ def _is_recent_duplicate(item, recent_tok_sets, threshold=0.55):
 
 def run_filters(item, cats):
     """5-filter chain. Returns enriched item or None (rejected)."""
+    # FILTER 0 — strict recency. Reject anything published before (today - 2 days).
+    # Catches stale articles (e.g. a 2023 WMO El Niño explainer) that slip into a
+    # source. Only applies when the item carries a parseable published date (IE);
+    # PIB/Wiki items have none and pass through.
+    pub = item.get("published")
+    if pub:
+        try:
+            pub_date = datetime.date.fromisoformat(str(pub)[:10])
+            if pub_date < datetime.date.today() - datetime.timedelta(days=2):
+                C.log(f"   ✗ Too old: {pub_date.isoformat()} — {(item.get('title') or '')[:55]}")
+                return None
+        except ValueError:
+            pass
+
     text = item["text"]
     toks = tokenize(text)
     low = text.lower()
@@ -797,8 +788,13 @@ def run_filters(item, cats):
     if not best:
         return None  # REJECT — no category core match
 
-    # FILTER 3 — ignore check (matched category's ignore set)
-    if len(toks & best["_ignore_kw"]) >= 2:
+    # FILTER 3 — ignore check. Reject on EITHER:
+    #   (a) an ignore PHRASE appearing as a word-bounded substring (precise —
+    #       catches fragments like "round 2" without false-matching "around 2000"), or
+    #   (b) >=3 loose ignore tokens (raised from 2 so two scattered generic words,
+    #       e.g. "foreign" + "president", no longer wrongly reject a relevant story).
+    if any(re.search(r"\b" + re.escape(p) + r"\b", low) for p in best.get("_ignore_phrases", [])) \
+       or len(toks & best["_ignore_kw"]) >= 3:
         return None  # REJECT — looks like ignored content
 
     # FILTER 2 — tier check
@@ -850,12 +846,31 @@ def run_filters(item, cats):
 # ─────────────────────────────────────────────────────────────────────────────
 # CONTENT GENERATION (Claude)
 # ─────────────────────────────────────────────────────────────────────────────
-SYS_EN = ("You are PaperSe CA writer for RPSC RAS aspirants. Write exam-focused current "
-          "affairs. Be crisp. Every bullet must be a testable fact. Never add opinions or "
-          "analysis. Only facts that RPSC can test.")
-SYS_HI = ("आप RPSC RAS अभ्यर्थियों के लिए PaperSe करेंट अफेयर्स लेखक हैं। परीक्षा-केंद्रित करेंट अफेयर्स "
-          "ताज़ा हिंदी में मौलिक रूप से लिखें — अनुवाद नहीं। संक्षिप्त रहें। हर बुलेट एक परीक्षा-योग्य तथ्य हो। "
-          "कोई राय या विश्लेषण नहीं — केवल वे तथ्य जो RPSC पूछ सकता है।")
+SYS_EN = (
+    "You are an RPSC RAS exam coach. Write current affairs for students "
+    "preparing for RPSC RAS Prelims.\n\n"
+    "Rules:\n"
+    "- Write like a coach, not journalist\n"
+    "- Every line must answer: 'What will RPSC test from this?'\n"
+    "- Context: max 2 lines explaining WHY this matters for RPSC RAS and "
+    "WHICH static chapter connects\n"
+    "- Bullets: only testable facts (names, numbers, dates, places)\n"
+    "- No storytelling or background filler\n"
+    "- No speculative statements\n"
+    "- Bold only: proper nouns, numbers, key terms RPSC will test\n"
+    "- Never write 'may', 'might', 'could', 'reportedly'")
+SYS_HI = (
+    "आप RPSC RAS परीक्षा कोच हैं। RPSC RAS प्रीलिम्स की तैयारी कर रहे छात्रों के लिए "
+    "करेंट अफेयर्स लिखें — ताज़ा हिंदी में मौलिक रूप से, अनुवाद नहीं।\n\n"
+    "नियम:\n"
+    "- पत्रकार की तरह नहीं, कोच की तरह लिखें\n"
+    "- हर पंक्ति यह उत्तर दे: 'RPSC इससे क्या पूछ सकता है?'\n"
+    "- संदर्भ: अधिकतम 2 पंक्तियाँ — RPSC RAS के लिए यह क्यों महत्वपूर्ण है और कौन-सा स्टैटिक अध्याय जुड़ता है\n"
+    "- बुलेट: केवल परीक्षा-योग्य तथ्य (नाम, संख्याएँ, तिथियाँ, स्थान)\n"
+    "- कोई कहानी या पृष्ठभूमि भराव नहीं\n"
+    "- कोई अनुमानित कथन नहीं\n"
+    "- बोल्ड केवल: व्यक्तिवाचक संज्ञा, संख्याएँ, मुख्य शब्द जो RPSC पूछेगा\n"
+    "- 'शायद', 'हो सकता है', 'कथित तौर पर' कभी न लिखें")
 
 def gen_main(item, lang):
     sysmsg = SYS_EN if lang == "EN" else SYS_HI

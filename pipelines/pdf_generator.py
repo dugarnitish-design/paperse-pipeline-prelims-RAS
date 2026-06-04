@@ -123,7 +123,7 @@ def _build_tag_html(item):
         for t, col in tags)
     return f'<div style="margin-top:3px;">{spans}</div>'
 
-def find_linked_pyqs(en_items, threshold=0.70, max_n=3):
+def find_linked_pyqs(en_items, threshold=0.60, max_n=3):
     """For each EN main item, find the single best-matching prelims PYQ in ChromaDB.
     Keep only matches with cosine similarity > threshold, max `max_n` total, one per item.
     Returns [{item_idx, score, pyq(row from questions table)}] in news order."""
@@ -133,7 +133,15 @@ def find_linked_pyqs(en_items, threshold=0.70, max_n=3):
         if not text:
             continue
         m = C.pyq_lookup(text, n=1, max_distance=2.0)   # top match; we filter by score
-        if m and (m.get("score") or 0) > threshold:
+        score = (m.get("score") or 0) if m else 0
+        # DEBUG: surface why PYQs do/don't show
+        C.log(f"   PYQ search: {text[:80]}")
+        if m:
+            C.log(f"   Top match: {score:.3f} - RPSC RAS {m.get('year')} Q{m.get('q_no')} "
+                  f"(threshold {threshold})")
+        else:
+            C.log(f"   Top match: none (threshold {threshold})")
+        if m and score > threshold:
             cands.append({"item_idx": i, "score": m["score"], "year": m["year"], "q_no": m["q_no"]})
     cands.sort(key=lambda x: x["score"], reverse=True)   # best matches first
     cands = cands[:max_n]                                  # cap at 3 (already one-per-item)
