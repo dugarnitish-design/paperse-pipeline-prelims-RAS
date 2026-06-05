@@ -21,14 +21,14 @@ from pipelines.curator_telegram import send_approval_message
 
 # ── draft helpers ─────────────────────────────────────────────────────────────
 
-def save_draft(date_str: str, items: list, msg_result: dict) -> None:
+def save_draft(date_str: str, items: list, msg_result: dict, auto_publish_at=None) -> None:
     """
     Upsert draft record into Supabase `curator_drafts` table.
     Also saves a local JSON copy for fallback.
     """
-    timeout_at = (
-        datetime.datetime.utcnow() + datetime.timedelta(hours=2)
-    ).isoformat() + "Z"
+    if auto_publish_at is None:
+        auto_publish_at = datetime.datetime.utcnow() + datetime.timedelta(hours=2)
+    timeout_at = auto_publish_at.isoformat() + "Z"
 
     row = {
         "date": date_str,
@@ -111,13 +111,29 @@ def main(date_str: str) -> None:
         C.log(f"  ✗ No EN items found for {date_str} — did daily_ca_pipeline.py run?")
         sys.exit(1)
 
+    # Guard against duplicate curator messages: if a draft already exists for this
+    # date in curator_drafts (e.g. a re-run, or another sender), skip sending.
+    try:
+        existing = C.sb_select("curator_drafts", select="date,status",
+                               params={"date": f"eq.{date_str}"})
+    except Exception as e:
+        existing = None
+        C.log(f"  ⚠ duplicate-check query failed (will proceed): {e}")
+    if existing:
+        C.log(f"  ⚠ Draft already exists for {date_str}, skipping duplicate.")
+        return
+
     C.log(f"  Found {len(items)} items (will send top 5 for approval, items 6-8 as candidates)")
 
+    # Auto-publish time = send_time + 2h (single source of truth for message + draft)
+    send_time = datetime.datetime.utcnow()
+    auto_publish_at = send_time + datetime.timedelta(hours=2)
+
     # Send Telegram approval message
-    msg_result = send_approval_message(date_str, items[:5])
+    msg_result = send_approval_message(date_str, items[:5], auto_publish_at=auto_publish_at)
 
     # Save draft (top 8 items)
-    save_draft(date_str, items, msg_result)
+    save_draft(date_str, items, msg_result, auto_publish_at=auto_publish_at)
 
     dashboard_url = C.ENV.get(
         "CURATOR_DASHBOARD_URL",
@@ -125,7 +141,7 @@ def main(date_str: str) -> None:
     )
     C.log(f"  ✓ Curator workflow initiated")
     C.log(f"  → Dashboard: {dashboard_url}")
-    C.log(f"  → Auto-publishes at: {date_str} 08:30 IST if no response")
+    C.log(f"  → Auto-publishes at: {C.ist_label(auto_publish_at)} if no response")
 
 
 if __name__ == "__main__":

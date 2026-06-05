@@ -24,10 +24,11 @@ def _admin_chat() -> str:
 
 # ── outbound ──────────────────────────────────────────────────────────────────
 
-def send_approval_message(date_str: str, items: list) -> dict:
+def send_approval_message(date_str: str, items: list, auto_publish_at=None) -> dict:
     """
     Send draft-ready notification to admin with [Approve & Publish] [Edit & Approve] buttons.
     `items` should be the top-5 selected items (dicts with title_en, final_priority_score, source).
+    `auto_publish_at` (UTC datetime) = send_time + 2h; shown as the auto-publish time.
     Returns {"message_id": int, "chat_id": str} or {"error": str}.
     """
     admin_chat = _admin_chat()
@@ -54,10 +55,11 @@ def send_approval_message(date_str: str, items: list) -> dict:
         lines.append(f"{i}. {title}")
         lines.append(f"   📊 Score: <code>{score}</code> | 📰 {source}")
 
+    ap_label = C.ist_label(auto_publish_at) if auto_publish_at else "in 2 hours"
     lines += [
         "",
         "Items 6–8 available on dashboard for replacement.",
-        "⏰ Auto-publishes in 2 hours if no response.",
+        f"⏰ Auto-publishes at {ap_label} if no response.",
         "",
         f'🔗 <a href="{dashboard_url}">Open Dashboard</a>',
     ]

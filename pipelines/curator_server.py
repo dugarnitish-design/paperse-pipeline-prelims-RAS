@@ -321,11 +321,26 @@ def _handle_callback(cq_id: str, cq_data: str, chat_id: str, msg_id):
         dashboard_url = C.ENV.get("CURATOR_DASHBOARD_URL", "http://localhost:5000")
         url = f"{dashboard_url.rstrip('/')}/curator/{date_str}"
         answer_callback_query(cq_id, "Opening dashboard...")
+        draft = load_draft(date_str)
+        ap_label = C.ist_label_from_iso((draft or {}).get("timeout_at", ""))
+        ap_text = (f"⏰ Auto-publishes at {ap_label}." if ap_label
+                   else "⏰ Auto-publishes 2 hours after the draft was sent.")
         edit_message_text(
             chat_id,
             msg_id,
-            f"✏️ Edit draft for {date_str}:\n{url}\n\n⏰ Auto-publishes at 8:30 AM IST.",
+            f"✏️ Edit draft for {date_str}:\n{url}\n\n{ap_text}",
         )
+
+
+def _post_pyq_polls(date_str: str) -> None:
+    """Post the 2 daily PYQ quiz polls — called IMMEDIATELY after a successful
+    publish so the PDF always lands in the channel first. Non-fatal on error."""
+    try:
+        from pipelines.pyq_poll_bot import run_daily_pyq_polls
+        C.log(f"  → Posting PYQ polls for {date_str} (after publish)")
+        run_daily_pyq_polls(date_str)
+    except Exception as e:
+        C.log(f"  ⚠ PYQ poll posting failed (non-fatal): {e}")
 
 
 def _publish(date_str: str) -> bool:
@@ -342,6 +357,7 @@ def _publish(date_str: str) -> bool:
         mark_draft_status(date_str, "published", {
             "published_at": datetime.datetime.utcnow().isoformat() + "Z",
         })
+        _post_pyq_polls(date_str)        # PDF first, polls immediately after
         return True
     else:
         C.log(f"  ✗ Publish failed:\n{result.stderr[-300:]}")
@@ -350,11 +366,29 @@ def _publish(date_str: str) -> bool:
 
 # ── Telegram polling thread (fallback when no webhook configured) ─────────────
 
+def _register_webhook_on_startup():
+    """Re-register the Telegram webhook on every server startup so the Approve/Edit
+    buttons keep working after Railway restarts (the webhook is lost on restart)."""
+    webhook_url = C.ENV.get("CURATOR_DASHBOARD_URL", "")
+    if not webhook_url:
+        C.log("  ⚠ CURATOR_DASHBOARD_URL not set — cannot register Telegram webhook on startup")
+        return
+    try:
+        result = set_webhook(f"{webhook_url.rstrip('/')}/telegram/callback")
+        ok = result.get("ok") if isinstance(result, dict) else result
+        C.log(f"  ✓ Telegram webhook registered on startup → {ok}")
+    except Exception as e:
+        C.log(f"  ⚠ Webhook registration on startup failed: {e}")
+
+
 def _start_telegram_polling():
     """
-    Background thread that polls Telegram for button callbacks.
-    Only active if CURATOR_POLLING=true in env (useful for local dev or no webhook).
+    Startup Telegram setup: always (re)register the webhook (so buttons survive
+    Railway restarts), then optionally start a polling thread for local/no-webhook
+    dev (CURATOR_POLLING=true).
     """
+    _register_webhook_on_startup()
+
     if C.ENV.get("CURATOR_POLLING", "").lower() != "true":
         return
 

@@ -46,10 +46,9 @@ python3 pipelines/pdf_generator.py "$DATE"
 echo; echo ">>> STEP 5: curator_workflow.py  (save draft + send Telegram approval)"
 python3 pipelines/curator_workflow.py "$DATE"
 
-echo; echo ">>> STEP 6: pyq_poll_bot.py  (post 2 PYQ quiz polls to the channel)"
-# Best-effort: never blocks the chain. Polls match the label date ($DATE = today's
-# published PDF / daily_ca_items), not $NEWS_DATE (yesterday's news).
-python3 pipelines/pyq_poll_bot.py --date "$DATE" || true
+# NOTE: PYQ polls are NOT posted here anymore. They post from the curator
+# publish path (curator_server._publish / curator_auto_publish) IMMEDIATELY
+# after the PDF is delivered to the channel — so the PDF always lands first.
 
 echo; echo "###############################################################"
 echo "#  DONE — outputs/daily-ca/EN/$DATE.pdf  &  HI/$DATE.pdf"

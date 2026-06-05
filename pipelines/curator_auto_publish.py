@@ -81,6 +81,13 @@ def auto_publish(date_str: str) -> None:
     if result.returncode == 0:
         C.log(f"  ✓ Published to Telegram channel")
         C.log(result.stdout[-500:] if result.stdout else "")
+        # PDF first, PYQ polls immediately after (non-fatal)
+        try:
+            from pipelines.pyq_poll_bot import run_daily_pyq_polls
+            C.log(f"  → Posting PYQ polls for {date_str} (after publish)")
+            run_daily_pyq_polls(date_str)
+        except Exception as e:
+            C.log(f"  ⚠ PYQ poll posting failed (non-fatal): {e}")
     else:
         C.log(f"  ✗ telegram_delivery failed:\n{result.stderr[-300:]}")
 

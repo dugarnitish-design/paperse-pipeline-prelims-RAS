@@ -250,3 +250,19 @@ def log(msg=""):
 
 def parse_date(s):
     return datetime.date.fromisoformat(s)
+
+# ── IST time labels (for curator auto-publish messaging) ──────────────────────
+IST_OFFSET = datetime.timedelta(hours=5, minutes=30)
+
+def ist_label(dt_utc):
+    """Format a UTC datetime (naive or aware) as 'HH:MM IST, DD Mon'."""
+    if getattr(dt_utc, "tzinfo", None) is not None:
+        dt_utc = dt_utc.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    return (dt_utc + IST_OFFSET).strftime("%H:%M IST, %d %b")
+
+def ist_label_from_iso(iso_str):
+    """Format a UTC ISO string ('...Z' or offset) as an IST label, or '' on failure."""
+    try:
+        return ist_label(datetime.datetime.fromisoformat((iso_str or "").replace("Z", "+00:00")))
+    except Exception:
+        return ""
