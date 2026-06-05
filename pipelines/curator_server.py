@@ -222,6 +222,53 @@ def publish_with_edits(date):
             category=item.get("category", ""),
         )
 
+    # ── Apply the curation to the DB + regenerate the PDF so REJECTED items are
+    #    truly gone from the website + PDF + channel, and EDITS are reflected. ──
+    rejected_items = [all_items[i] for i in range(min(5, len(all_items))) if i not in kept_idx]
+    changed = bool(rejected_items) or edits_made > 0
+
+    # 1. Persist title/summary edits to the kept items (EN rows)
+    for i in kept_idx:
+        if i >= len(all_items):
+            continue
+        item = all_items[i]
+        if not item.get("id"):
+            continue
+        patch = {}
+        nt = request.form.get(f"title_edit_{i}", "").strip()
+        ns = request.form.get(f"summary_edit_{i}", "").strip()
+        if nt: patch["title"] = nt
+        if ns: patch["summary"] = ns
+        if patch:
+            try:
+                C.sb_update("daily_ca_items", patch, {"id": str(item["id"])})
+            except Exception as e:
+                C.log(f"  ⚠ edit update failed for id {item.get('id')}: {e}")
+
+    # 2. Remove rejected items — EN row by id + the HI counterpart (matched on
+    #    date+category+priority, which is unique among the day's main items).
+    for item in rejected_items:
+        try:
+            if item.get("id"):
+                C.sb_delete("daily_ca_items", {"id": str(item["id"])})
+            C.sb_delete("daily_ca_items", {
+                "date": date, "language": "HI", "is_main": "true",
+                "category": item.get("category", ""), "priority": item.get("priority"),
+            })
+            C.log(f"  ✓ removed rejected item: {(item.get('title') or '')[:45]}")
+        except Exception as e:
+            C.log(f"  ⚠ could not remove rejected item: {e}")
+
+    # 3. Regenerate the PDF from the now-curated DB (only if something changed)
+    if changed:
+        env = {**os.environ,
+               "DYLD_FALLBACK_LIBRARY_PATH": "/opt/homebrew/lib:" + os.environ.get("DYLD_FALLBACK_LIBRARY_PATH", "")}
+        C.log(f"  → Regenerating PDF for {date} ({len(kept_items)} kept, {len(rejected_items)} removed)")
+        rgen = subprocess.run([sys.executable, str(C.ROOT / "pipelines" / "pdf_generator.py"), date],
+                              cwd=str(C.ROOT), env=env, capture_output=True, text=True)
+        if rgen.returncode != 0:
+            C.log(f"  ⚠ PDF regen failed:\n{rgen.stderr[-300:]}")
+
     final_indices = kept_idx + added_idx
     mark_draft_status(date, "approved", {
         "approved_at": datetime.datetime.utcnow().isoformat() + "Z",
@@ -229,7 +276,7 @@ def publish_with_edits(date):
         "selected_indices": final_indices,
     })
 
-    # Channel post is best-effort — approval + rejection-learning already recorded.
+    # Channel post — now posts the regenerated PDF (kept items only).
     published = _publish(date)
     return jsonify({
         "status": "approved",
