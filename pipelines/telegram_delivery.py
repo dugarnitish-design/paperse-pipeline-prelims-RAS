@@ -62,12 +62,14 @@ def post_to_telegram(label_date, dry_run=False):
 
     # Get main items (top 5)
     try:
+        # Main items = is_main=true. tier is a priority bucket (NOT main/also) —
+        # main items carry tier 2/3, so the old tier=1 filter matched nothing.
         main_items = C.sb_select("daily_ca_items",
                                  params={
                                      "date": f"eq.{label_date.isoformat()}",
-                                     "tier": "eq.1",
                                      "is_main": "eq.true",
                                      "language": "eq.EN",
+                                     "order": "priority.desc",
                                      "limit": 5
                                  })
     except Exception as e:

@@ -152,9 +152,9 @@ def approve_without_edits(date):
         "selected_indices": list(range(len(items))),
     })
 
-    # Publish
-    ok = _publish(date)
-    return jsonify({"status": "published" if ok else "error", "date": date}), 200 if ok else 500
+    # Channel post is best-effort — approval is already recorded above.
+    published = _publish(date)
+    return jsonify({"status": "approved", "channel_posted": published, "date": date}), 200
 
 
 @app.route("/curator/<date>/publish", methods=["POST"])
@@ -227,18 +227,19 @@ def publish_with_edits(date):
         "approved_at": datetime.datetime.utcnow().isoformat() + "Z",
         "approval_method": "dashboard_edited",
         "selected_indices": final_indices,
-        "edits_made": edits_made,
     })
 
-    ok = _publish(date)
+    # Channel post is best-effort — approval + rejection-learning already recorded.
+    published = _publish(date)
     return jsonify({
-        "status": "published" if ok else "error",
+        "status": "approved",
+        "channel_posted": published,
         "date": date,
         "kept": len(kept_items),
         "added": len(added_items),
         "rejected": 5 - len(kept_items),
         "edited": edits_made,
-    }), 200 if ok else 500
+    }), 200
 
 
 # ── routes: Telegram webhook ──────────────────────────────────────────────────
