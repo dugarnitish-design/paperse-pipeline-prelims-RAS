@@ -611,7 +611,13 @@ def fetch_pib(date):
             pass
 
     # 3 — RSS fallback (Railway-safe; ~20 latest English releases dated this day)
-    items = pib_scraper.fetch_via_rss(date)
+    # Resilient: a scraper/Chromium failure on Railway must NOT crash the whole
+    # pipeline — degrade gracefully so IE + other sources still produce the brief.
+    try:
+        items = pib_scraper.fetch_via_rss(date)
+    except Exception as e:
+        C.log(f"   ⚠ PIB scraper failed ({type(e).__name__}: {e}) — continuing WITHOUT PIB")
+        return []
     C.log(f"   PIB: {len(items)} releases for {iso} (RSS fallback)")
     return items
 
