@@ -1,9 +1,6 @@
 [build]
-builder = "nixpacks"
+builder = "dockerfile"
+dockerfilePath = "Dockerfile.pipeline"
 
 [deploy]
-# SERVICE_MODE controls which service this is:
-#   curator  → runs Flask curator dashboard (ideal-compassion service)
-#   pipeline → runs daily CA pipeline (paperse-pipeline service, cron job)
-# startCommand removed — nixpacks.toml [start] handles this with correct Python PATH
-# If startCommand is set here it overrides nixpacks PATH setup causing python3 not found
+startCommand = "python3 launch.py"
