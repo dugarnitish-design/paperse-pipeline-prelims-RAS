@@ -198,31 +198,25 @@ def approve_without_edits(date):
     return jsonify({"status": "approved", "channel_posted": published, "date": date}), 200
 
 
-def _delete_with_hi(date: str, item: dict) -> None:
-    """Delete an EN item by id + its HI counterpart (matched on date+category+priority)."""
+def _set_status_with_hi(date: str, item: dict, status: str, is_main=None) -> None:
+    """
+    Set status (and optionally is_main) on an EN item by id AND its HI counterpart
+    (matched on date+category+priority). Never deletes — FIX 6 keeps every item in
+    daily_ca_items so un-promoted also-in-news and rejected mains survive curation.
+    Status values: 'published' | 'also_in_news' | 'rejected' (default 'pending').
+    """
+    patch = {"status": status}
+    if is_main is not None:
+        patch["is_main"] = is_main
     try:
         if item.get("id"):
-            C.sb_delete("daily_ca_items", {"id": str(item["id"])})
-        C.sb_delete("daily_ca_items", {
+            C.sb_update("daily_ca_items", patch, {"id": str(item["id"])})
+        C.sb_update("daily_ca_items", patch, {
             "date": date, "language": "HI",
             "category": item.get("category", ""), "priority": item.get("priority"),
         })
     except Exception as e:
-        C.log(f"  ⚠ could not remove item {item.get('id')}: {e}")
-
-
-def _set_main_with_hi(date: str, item: dict, is_main: bool) -> None:
-    """Flip is_main on an EN item + its HI counterpart (for promote/demote)."""
-    flag = "true" if is_main else "false"
-    try:
-        if item.get("id"):
-            C.sb_update("daily_ca_items", {"is_main": is_main}, {"id": str(item["id"])})
-        C.sb_update("daily_ca_items", {"is_main": is_main}, {
-            "date": date, "language": "HI",
-            "category": item.get("category", ""), "priority": item.get("priority"),
-        })
-    except Exception as e:
-        C.log(f"  ⚠ could not set is_main={flag} for {item.get('id')}: {e}")
+        C.log(f"  ⚠ could not set status={status} for {item.get('id')}: {e}")
 
 
 @app.route("/curator/<date>/publish", methods=["POST"])
@@ -250,14 +244,16 @@ def publish_with_edits(date):
     also_items = _fetch_items(date, is_main=False, limit=5)
     by_id = {str(it["id"]): it for it in (main_items + also_items)}
 
-    sel_set      = set(selected_ids)
-    selected     = [by_id[i] for i in selected_ids if i in by_id]
-    promoted     = [it for it in also_items if str(it["id"]) in sel_set]   # also → main
-    removed      = [it for it in (main_items + also_items) if str(it["id"]) not in sel_set]
+    sel_set    = set(selected_ids)
+    selected   = [by_id[i] for i in selected_ids if i in by_id]              # checked (main + promoted)
+    promoted   = [it for it in also_items if str(it["id"]) in sel_set]       # also → published main
+    rejected   = [it for it in main_items if str(it["id"]) not in sel_set]   # unchecked main → rejected
+    kept_also  = [it for it in also_items if str(it["id"]) not in sel_set]   # un-promoted also → also_in_news
 
-    # 1. Promote selected also-in-news items into the main set.
+    # 1. Publish set (selected mains + promoted also-in-news) → status=published, is_main=true.
+    for it in selected:
+        _set_status_with_hi(date, it, status="published", is_main=True)
     for it in promoted:
-        _set_main_with_hi(date, it, is_main=True)
         learning.log_replacement(
             old_item_title="(also-in-news promoted)",
             new_item_title=it.get("title") or it.get("title_en", ""),
@@ -284,12 +280,17 @@ def publish_with_edits(date):
             except Exception as e:
                 C.log(f"  ⚠ edit update failed for id {iid}: {e}")
 
-    # 3. Remove every unselected item (rejected mains + un-promoted also) so the
-    #    PDF + website + channel carry the SELECTED items only. Rejections were
-    #    already learned via /reject, so we only delete here (no double-learning).
-    for it in removed:
-        _delete_with_hi(date, it)
-        C.log(f"  ✓ removed unselected item: {(it.get('title') or '')[:45]}")
+    # 3. Preserve the rest instead of deleting (FIX 6 — nothing is ever hard-deleted):
+    #    - un-promoted also-in-news stay visible (status=also_in_news, is_main=false);
+    #    - unchecked mains are demoted (is_main=false) out of every is_main=true
+    #      consumer — website, channel, MCQs, PYQ polls, PDF main — and marked
+    #      status=rejected; the PDF also-section filters status=rejected so they don't
+    #      resurface there. RAG already learned the rejection at /reject (no re-learn).
+    for it in kept_also:
+        _set_status_with_hi(date, it, status="also_in_news", is_main=False)
+    for it in rejected:
+        _set_status_with_hi(date, it, status="rejected", is_main=False)
+        C.log(f"  ✓ rejected (kept, demoted): {(it.get('title') or '')[:45]}")
 
     # 4. Log approvals for the published set.
     for it in selected:
@@ -302,7 +303,8 @@ def publish_with_edits(date):
     env = {**os.environ,
            "DYLD_FALLBACK_LIBRARY_PATH": "/opt/homebrew/lib:" + os.environ.get("DYLD_FALLBACK_LIBRARY_PATH", "")}
     C.log(f"  → Regenerating PDF for {date} ({len(selected)} selected, "
-          f"{len(promoted)} promoted, {len(removed)} removed, {edits_made} edited)")
+          f"{len(promoted)} promoted, {len(rejected)} rejected, "
+          f"{len(kept_also)} also-kept, {edits_made} edited)")
     rgen = subprocess.run([sys.executable, str(C.ROOT / "pipelines" / "pdf_generator.py"), date],
                           cwd=str(C.ROOT), env=env, capture_output=True, text=True)
     if rgen.returncode != 0:
@@ -322,7 +324,8 @@ def publish_with_edits(date):
         "date": date,
         "selected": len(selected),
         "promoted": len(promoted),
-        "removed": len(removed),
+        "rejected": len(rejected),
+        "also_kept": len(kept_also),
         "edited": edits_made,
     }), 200
 

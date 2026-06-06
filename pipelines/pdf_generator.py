@@ -352,6 +352,11 @@ def build_pdf(date, lang, linked_pyqs=None):
         "date": f"eq.{ds}", "is_main": "eq.true", "language": f"eq.{lang}", "order": "priority.desc"})
     also_items = C.sb_select("daily_ca_items", params={
         "date": f"eq.{ds}", "is_main": "eq.false", "language": f"eq.{lang}", "order": "priority.desc"})
+    # FIX 6: rejected items are kept in the DB (is_main=false, status='rejected') for
+    # audit/RAG but must never appear in the PDF. Null-safe — pre-curation rows are
+    # 'pending' and still render in the draft PDF.
+    main_items = [r for r in main_items if r.get("status") != "rejected"]
+    also_items = [r for r in also_items if r.get("status") != "rejected"]
     if not main_items:
         C.log(f"   ⚠ no {lang} main items for {ds}; skipping {lang} PDF")
         return None
@@ -376,6 +381,7 @@ def main(date):
     ds = date.isoformat()
     en_main = C.sb_select("daily_ca_items", params={
         "date": f"eq.{ds}", "is_main": "eq.true", "language": "eq.EN", "order": "priority.desc"})
+    en_main = [r for r in en_main if r.get("status") != "rejected"]   # FIX 6: never link PYQs off rejected items
     linked_pyqs = find_linked_pyqs(en_main)
     C.log(f"   → {len(linked_pyqs)} PYQ(s) linked to today's news")
     en = build_pdf(date, "EN", linked_pyqs)
