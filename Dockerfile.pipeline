@@ -1,12 +1,11 @@
 # Daily CA pipeline service (Railway cron).
 # nixpacks couldn't reliably resolve WeasyPrint's native libs — Docker + apt does.
-# Handles all three heavy deps: WeasyPrint (Pango/Cairo), Playwright+Chromium, torch/chromadb.
+# Handles the heavy deps: WeasyPrint (Pango/Cairo) and torch/chromadb.
 FROM python:3.11-slim
 
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+    PIP_NO_CACHE_DIR=1
 
 # WeasyPrint native libraries (Pango / Cairo / GDK-Pixbuf / HarfBuzz) + Latin fallback fonts.
 # (Hindi/Devanagari renders via @font-face from ./fonts committed in the repo.)
@@ -16,13 +15,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
-# Python deps (chromadb, sentence-transformers/torch, weasyprint, playwright, etc.)
+# Python deps (chromadb, sentence-transformers/torch, weasyprint, etc.)
 COPY requirements.txt .
 RUN pip install -r requirements.txt
-
-# Playwright Chromium + its OS deps — matches the installed playwright version.
-# (PIB scraper needs a real Chromium; Akamai blocks plain-requests/headless.)
-RUN python -m playwright install --with-deps chromium
 
 # Pre-download the sentence-transformer model (458 MB) at build time so it is
 # baked into the image. Without this every cron run downloads it from HuggingFace

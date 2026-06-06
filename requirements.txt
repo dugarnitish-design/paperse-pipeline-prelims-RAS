@@ -5,8 +5,5 @@ chromadb>=0.4.0
 sentence-transformers>=2.2.0
 weasyprint>=60.0
 beautifulsoup4>=4.12.0
-# PIB scraper drives a headed Chromium (Akamai blocks headless/plain-requests).
-# After install run once:  python3 -m playwright install chromium
-playwright>=1.40.0
 python-telegram-bot>=20.0
 flask>=3.0.0
