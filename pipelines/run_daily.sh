@@ -26,7 +26,11 @@ echo "#  IE scrape date: $NEWS_DATE (yesterday) | PIB date: $NEWS_DATE (yesterda
 echo "###############################################################"
 
 echo; echo ">>> STEP 0: ie_scraper.py  (scrape yesterday's IE articles from the website)"
-python3 pipelines/ie_scraper.py "$DATE" >/dev/null
+# Best-effort: if IE blocks Railway's cloud IP or returns 0 articles, we log a
+# warning and continue — daily_ca_pipeline (STEP 2) calls fetch_ie_articles()
+# directly and falls back to PIB-only if the IE cache is empty.
+python3 pipelines/ie_scraper.py "$DATE" >/dev/null || \
+    echo "⚠ ie_scraper exited non-zero (IE may have blocked this IP or returned 0 articles — PIB-only fallback)"
 
 echo; echo ">>> STEP 1: pib_scraper.py  (LOCAL headed scrape → Supabase pib_cache)"
 # Headed Playwright scrape of yesterday's PIB releases, upserted to Supabase so
