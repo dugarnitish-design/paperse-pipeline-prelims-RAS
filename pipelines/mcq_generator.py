@@ -127,4 +127,10 @@ def main(date):
 
 if __name__ == "__main__":
     d = C.parse_date(sys.argv[1]) if len(sys.argv) > 1 else datetime.date.today()
+    # Safety net: refuse absurd future dates (e.g. a fat-fingered arg a month
+    # ahead, which once wrote a 2026-07-03 batch). Today and past-date back-fill
+    # are always allowed; only dates beyond tomorrow are rejected.
+    if d > datetime.date.today() + datetime.timedelta(days=1):
+        sys.exit(f"✗ Refusing future date {d.isoformat()} "
+                 f"(today is {datetime.date.today().isoformat()}). Pass a real date.")
     sys.exit(0 if main(d) else 1)
