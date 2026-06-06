@@ -34,6 +34,26 @@ class CuratorLearning:
 
     # ── feedback logging ──────────────────────────────────────────────────────
 
+    def _already_learned(self, item_id, session_id) -> bool:
+        """
+        FIX 7 — session-dedup guard. True if this item already produced a
+        rejection/replacement RAG write in this curation session, so we don't
+        penalize its category/topic twice when the curator toggles reject more
+        than once (or reloads and re-rejects) within the same session.
+        """
+        if not item_id or not session_id:
+            return False
+        try:
+            rows = C.sb_select("curator_feedback", select="id", params={
+                "item_id": f"eq.{item_id}",
+                "curator_session_id": f"eq.{session_id}",
+                "action": "in.(rejected,replaced)",
+            })
+            return bool(rows)
+        except Exception as e:
+            C.log(f"  ⚠ dedup check failed (will proceed): {e}")
+            return False
+
     def log_rejection(
         self,
         item_title: str,
@@ -42,13 +62,23 @@ class CuratorLearning:
         topic: str = "",
         auto_published: bool = False,
         rejection_reason: str = "",
+        item_id=None,
+        session_id=None,
     ) -> dict:
         """
         Log a curator rejection. Updates category + topic intelligence.
+        FIX 7: at most one RAG write per (item_id, session_id) — a repeat reject
+        of the same item in the same session is a no-op.
 
         Returns: dict with success status and learning results.
         """
         date_str = datetime.date.today().isoformat()
+        session_id = session_id or date_str   # default session = today's draft
+
+        # FIX 7 — skip the duplicate RAG write (and insert) for a re-reject.
+        if self._already_learned(item_id, session_id):
+            C.log(f"  ⊘ RAG dedup — item {item_id} already learned this session ({session_id})")
+            return {"success": True, "deduped": True, "action": "rejected", "item_title": item_title}
 
         # 1. Insert into curator_feedback
         try:
@@ -58,6 +88,8 @@ class CuratorLearning:
                 "category": category,
                 "action": "rejected",
                 "auto_published": auto_published,
+                "item_id": str(item_id) if item_id else None,
+                "curator_session_id": session_id,
             }, returning=False)
         except Exception as e:
             C.log(f"  ⚠ curator_feedback insert failed: {e}")
@@ -86,12 +118,20 @@ class CuratorLearning:
         old_item_text: str = "",
         topic: str = "",
         auto_published: bool = False,
+        item_id=None,
+        session_id=None,
     ) -> dict:
         """
         Log when an item is replaced by a candidate item.
         Treated as a rejection of the original item.
+        FIX 7: deduped per (item_id, session_id) like log_rejection.
         """
         date_str = datetime.date.today().isoformat()
+        session_id = session_id or date_str
+
+        if self._already_learned(item_id, session_id):
+            C.log(f"  ⊘ RAG dedup — item {item_id} already learned this session ({session_id})")
+            return {"success": True, "deduped": True, "action": "replaced", "old_item": old_item_title}
 
         try:
             C.sb_insert("curator_feedback", {
@@ -100,6 +140,8 @@ class CuratorLearning:
                 "category": category,
                 "action": "replaced",
                 "auto_published": auto_published,
+                "item_id": str(item_id) if item_id else None,
+                "curator_session_id": session_id,
             }, returning=False)
         except Exception as e:
             C.log(f"  ⚠ curator_feedback insert failed: {e}")
@@ -123,8 +165,11 @@ class CuratorLearning:
         item_title: str,
         category: str,
         auto_published: bool = False,
+        item_id=None,
+        session_id=None,
     ) -> None:
-        """Log a curator approval (for auditing)."""
+        """Log a curator approval (for auditing). No RAG write, so no dedup —
+        but we stamp item_id/session_id for a consistent audit trail."""
         try:
             C.sb_insert("curator_feedback", {
                 "date": datetime.date.today().isoformat(),
@@ -132,6 +177,8 @@ class CuratorLearning:
                 "category": category,
                 "action": "approved",
                 "auto_published": auto_published,
+                "item_id": str(item_id) if item_id else None,
+                "curator_session_id": session_id,
             }, returning=False)
         except Exception as e:
             C.log(f"  ⚠ approval log failed: {e}")

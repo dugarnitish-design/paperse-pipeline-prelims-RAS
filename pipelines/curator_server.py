@@ -164,6 +164,8 @@ def reject_item(date):
         rejected_text=data.get("summary", ""),
         topic=data.get("topic", ""),
         rejection_reason=reason,
+        item_id=data.get("id"),     # FIX 7: dashboard already sends the item id
+        session_id=date,            # FIX 7: one RAG write per item per draft (date)
     )
     C.log(f"  ✓ immediate reject learned: {(data.get('title') or '')[:40]} · {reason}")
     return jsonify({"ok": True, "learning": result}), 200
@@ -184,6 +186,8 @@ def approve_without_edits(date):
         learning.log_approval(
             item_title=item.get("title") or item.get("title_en", ""),
             category=item.get("category", ""),
+            item_id=str(item.get("id") or "") or None,
+            session_id=date,
         )
 
     # Mark approved
@@ -258,6 +262,8 @@ def publish_with_edits(date):
             old_item_title="(also-in-news promoted)",
             new_item_title=it.get("title") or it.get("title_en", ""),
             category=it.get("category", ""),
+            item_id=str(it.get("id") or ""),
+            session_id=date,
         )
 
     # 2. Apply title/summary edits to the selected items (EN rows).
@@ -297,6 +303,8 @@ def publish_with_edits(date):
         learning.log_approval(
             item_title=it.get("title") or it.get("title_en", ""),
             category=it.get("category", ""),
+            item_id=str(it.get("id") or ""),
+            session_id=date,
         )
 
     # 5. Regenerate the PDF from the now-curated DB (selected items only).
