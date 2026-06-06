@@ -155,8 +155,8 @@ class CuratorLearning:
         try:
             rows = C.sb_select(
                 "ca_categories",
-                select="id,name,tier_weight,rejection_examples",
-                params={"name": f"ilike.{category}"},
+                select="id,category,tier_weight,rejection_examples",
+                params={"category": f"ilike.{category}"},
             )
         except Exception as e:
             return {"error": f"fetch failed: {e}"}
@@ -224,7 +224,7 @@ class CuratorLearning:
         try:
             rows = C.sb_select(
                 "topic_kb",
-                select="id,topic,priority_score,rejection_count",
+                select="topic_id,topic,priority_score,rejection_count",
                 params={"topic": f"ilike.{topic_name}"},
             )
         except Exception as e:
@@ -235,7 +235,7 @@ class CuratorLearning:
             return {"skipped": f"topic '{topic_name}' not found"}
 
         row = rows[0]
-        topic_id = row["id"]
+        topic_id = row["topic_id"]
         old_rejection = int(row.get("rejection_count") or 0)
         old_priority  = float(row.get("priority_score") or 1.0)
 
@@ -258,7 +258,7 @@ class CuratorLearning:
             )
 
         try:
-            C.sb_update("topic_kb", patch=patch, match={"id": topic_id})
+            C.sb_update("topic_kb", patch=patch, match={"topic_id": topic_id})
         except Exception as e:
             return {"error": f"update failed: {e}"}
 

@@ -1001,6 +1001,10 @@ def score_item(item, cats):
     quality = _text_quality(text)
     if best:
         tier = best.get("tier") or 3
+        # RAG learning: curator rejections lower a category's tier_weight (default
+        # 1.0). Scaling priority by it deprioritises repeatedly-rejected categories
+        # in tomorrow's ranking. tier_weight=1.0 → no change (current behaviour).
+        tier_weight = float(best.get("tier_weight") or 1.0)
         priority = TIER_BASE.get(tier, 0.4) + 0.05 * best_score
         if item_raj:
             priority += 0.3
@@ -1017,7 +1021,7 @@ def score_item(item, cats):
             "category": best.get("category"), "tier": tier,
             "rajasthan_angle": item_raj or bool(best.get("rajasthan_angle")),
             "static_connect": static_connect, "static_subject": best.get("static_subject"),
-            "exam_ref": exam_ref, "priority": round(priority * quality, 3),
+            "exam_ref": exam_ref, "priority": round(priority * quality * tier_weight, 3),
             "match_score": best_score, "match_core": best_core,
             "text_quality": round(quality, 2),
         })
