@@ -405,6 +405,13 @@ def _publish(date_str: str) -> bool:
         mark_draft_status(date_str, "published", {
             "published_at": datetime.datetime.utcnow().isoformat() + "Z",
         })
+        # Re-upload the now-curated (regenerated) PDF to Supabase so paperse.in
+        # serves exactly what went to the channel — never the pre-curation draft.
+        try:
+            from pipelines import upload_pdfs
+            upload_pdfs.main(date_str)
+        except Exception as e:
+            C.log(f"  ⚠ PDF re-upload after publish failed (non-fatal): {e}")
         _post_pyq_polls(date_str)        # PDF first, polls immediately after
         return True
     else:

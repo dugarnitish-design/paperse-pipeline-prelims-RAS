@@ -50,6 +50,13 @@ python3 pipelines/pdf_generator.py "$DATE"
 echo; echo ">>> STEP 5: curator_workflow.py  (save draft + send Telegram approval)"
 python3 pipelines/curator_workflow.py "$DATE"
 
+echo; echo ">>> STEP 6: upload_pdfs.py  (upload EN+HI PDFs to Supabase → daily_pdfs)"
+# Best-effort: registers the draft PDFs so paperse.in has something to serve even
+# before curation. On curator publish, curator_server._publish() re-uploads the
+# regenerated (curated) PDF so the website always matches the channel.
+python3 pipelines/upload_pdfs.py "$DATE" || \
+    echo "⚠ upload_pdfs exited non-zero (website PDF links may be stale — non-fatal)"
+
 # NOTE: PYQ polls are NOT posted here anymore. They post from the curator
 # publish path (curator_server._publish / curator_auto_publish) IMMEDIATELY
 # after the PDF is delivered to the channel — so the PDF always lands first.
