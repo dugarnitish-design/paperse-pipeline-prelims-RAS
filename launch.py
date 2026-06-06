@@ -18,8 +18,9 @@ if SERVICE_MODE == "curator":
     # Add project root to path so 'pipelines' package is importable
     sys.path.insert(0, os.getcwd())
     # Import the real curator server app
-    from pipelines.curator_server import app, _start_telegram_polling
+    from pipelines.curator_server import app, _start_telegram_polling, _start_autopublish_scheduler
     _start_telegram_polling()
+    _start_autopublish_scheduler()   # daily 08:30 IST auto-publish of pending drafts
     print(f"Curator dashboard live on port {PORT}", flush=True)
     app.run(host="0.0.0.0", port=PORT, debug=False)
 else:

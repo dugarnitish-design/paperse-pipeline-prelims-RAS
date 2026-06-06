@@ -10,7 +10,8 @@ notification to the admin with [Approve & Publish] and [Edit & Approve] buttons.
 The pipeline exits immediately. Publishing happens either when:
   a) Admin clicks "Approve" → curator_server.py webhook handles it
   b) Admin edits on dashboard → curator_server.py /publish handles it
-  c) 2-hour timeout → curator_auto_publish.py (run by Railway cron at 8:30 AM IST)
+  c) No response by 08:30 AM IST → curator_auto_publish.py, fired by the daily
+     scheduler thread in curator_server (_start_autopublish_scheduler)
 """
 import sys, json, datetime, pathlib
 
@@ -21,13 +22,28 @@ from pipelines.curator_telegram import send_approval_message
 
 # ── draft helpers ─────────────────────────────────────────────────────────────
 
+def next_autopublish_utc(after=None):
+    """
+    The next fixed daily auto-publish slot (default 08:30 IST = 03:00 UTC) as a UTC
+    datetime. Matches curator_server._start_autopublish_scheduler. Used only for the
+    "auto-publishes at …" label shown to the curator (Telegram + dashboard).
+    """
+    after = after or datetime.datetime.utcnow()
+    hour = int(C.ENV.get("AUTOPUBLISH_HOUR_UTC", "3"))
+    minute = int(C.ENV.get("AUTOPUBLISH_MIN_UTC", "0"))
+    slot = after.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if slot <= after:
+        slot += datetime.timedelta(days=1)
+    return slot
+
+
 def save_draft(date_str: str, items: list, msg_result: dict, auto_publish_at=None) -> None:
     """
     Upsert draft record into Supabase `curator_drafts` table.
     Also saves a local JSON copy for fallback.
     """
     if auto_publish_at is None:
-        auto_publish_at = datetime.datetime.utcnow() + datetime.timedelta(hours=2)
+        auto_publish_at = next_autopublish_utc()
     timeout_at = auto_publish_at.isoformat() + "Z"
 
     row = {
@@ -125,9 +141,11 @@ def main(date_str: str) -> None:
 
     C.log(f"  Found {len(items)} items (will send top 5 for approval, items 6-8 as candidates)")
 
-    # Auto-publish time = send_time + 2h (single source of truth for message + draft)
+    # Auto-publish time = the fixed daily slot (08:30 IST = 03:00 UTC), single source
+    # of truth for the Telegram message + draft.timeout_at (display only — the curator
+    # service scheduler is what actually fires the publish).
     send_time = datetime.datetime.utcnow()
-    auto_publish_at = send_time + datetime.timedelta(hours=2)
+    auto_publish_at = next_autopublish_utc(send_time)
 
     # Send Telegram approval message
     msg_result = send_approval_message(date_str, items[:5], auto_publish_at=auto_publish_at)

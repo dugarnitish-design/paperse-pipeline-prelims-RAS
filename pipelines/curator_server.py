@@ -410,7 +410,7 @@ def _handle_callback(cq_id: str, cq_data: str, chat_id: str, msg_id):
         draft = load_draft(date_str)
         ap_label = C.ist_label_from_iso((draft or {}).get("timeout_at", ""))
         ap_text = (f"⏰ Auto-publishes at {ap_label}." if ap_label
-                   else "⏰ Auto-publishes 2 hours after the draft was sent.")
+                   else "⏰ Auto-publishes at 8:30 AM IST if no response.")
         edit_message_text(
             chat_id,
             msg_id,
@@ -507,6 +507,48 @@ def _start_telegram_polling():
                 import time; time.sleep(5)
 
     t = threading.Thread(target=poll, daemon=True)
+    t.start()
+
+
+def _start_autopublish_scheduler():
+    """
+    Daily fixed-time auto-publish. Fires once per IST-day at AUTOPUBLISH_HOUR_UTC:
+    AUTOPUBLISH_MIN_UTC (default 03:00 UTC = 08:30 AM IST) and calls
+    curator_auto_publish.auto_publish(<today's IST date>).
+
+    Replaces the old 2-hour rolling window. The fixed clock time IS the gate; the
+    publish itself is idempotent (auto_publish no-ops if the draft was already
+    approved/published), so a restart after the fire time re-checks safely rather
+    than skipping or double-posting.
+    """
+    import time
+    hour = int(C.ENV.get("AUTOPUBLISH_HOUR_UTC", "3"))
+    minute = int(C.ENV.get("AUTOPUBLISH_MIN_UTC", "0"))
+    IST = datetime.timedelta(hours=5, minutes=30)
+
+    C.log(f"  → Starting auto-publish scheduler (daily at {hour:02d}:{minute:02d} UTC "
+          f"= 08:30 IST)")
+
+    def run():
+        from pipelines.curator_auto_publish import auto_publish
+        last_run_ist_date = None
+        while True:
+            try:
+                now = datetime.datetime.now(datetime.timezone.utc)
+                ist_date = (now + IST).date().isoformat()
+                target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                # Fire when we're at/past today's target time and haven't run for
+                # this IST date yet. Late-start-safe: a restart after the target
+                # still fires (auto_publish no-ops if already handled).
+                if now >= target and last_run_ist_date != ist_date:
+                    last_run_ist_date = ist_date
+                    C.log(f"  ⏰ [autopublish-scheduler] firing for {ist_date}")
+                    auto_publish(ist_date)
+            except Exception as e:
+                C.log(f"  ⚠ [autopublish-scheduler] error: {e}")
+            time.sleep(30)
+
+    t = threading.Thread(target=run, daemon=True)
     t.start()
 
 

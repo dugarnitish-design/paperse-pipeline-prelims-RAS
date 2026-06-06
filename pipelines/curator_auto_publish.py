@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """
-STEP 6 — Auto-publish fallback (run by Railway cron at 08:30 AM IST / 03:00 UTC).
+STEP 6 — Auto-publish fallback.
 
   python3 pipelines/curator_auto_publish.py 2026-06-03
 
-Checks if today's draft is still "pending" after the 2-hour window.
-If so, publishes top 5 items as-is and logs auto_published=true.
+Triggered at a FIXED time (08:30 AM IST = 03:00 UTC) by the daily scheduler thread
+inside the curator service (see curator_server._start_autopublish_scheduler). The
+scheduler's clock IS the gate — this function no longer checks a rolling timeout.
 
-If draft was already approved/published, logs "Late — already handled" and exits.
+If today's draft is still "pending" when called, publishes the top 5 items as-is and
+logs auto_published=true. If it was already approved/published/auto_published, it's a
+no-op (so a service restart or manual re-run never double-publishes).
 """
 import sys, datetime, json, pathlib, subprocess
 
@@ -32,18 +35,8 @@ def auto_publish(date_str: str) -> None:
         C.log(f"  ✓ Draft already {status} — no action needed.")
         return
 
-    # Check timeout
-    timeout_at_str = draft.get("timeout_at", "")
-    if timeout_at_str:
-        timeout_at = datetime.datetime.fromisoformat(timeout_at_str.replace("Z", "+00:00"))
-        now = datetime.datetime.now(datetime.timezone.utc)
-        if now < timeout_at:
-            remaining = int((timeout_at - now).total_seconds() / 60)
-            C.log(f"  ⏳ Timeout not reached — {remaining} min remaining. Exiting.")
-            return
-
-    # Timeout reached → auto-publish
-    C.log(f"  ⏰ 2-hour timeout reached — auto-publishing top 5 items")
+    # Fixed-time trigger (08:30 IST). Draft is still pending → auto-publish top 5.
+    C.log(f"  ⏰ Fixed auto-publish time reached — publishing top 5 items")
 
     items = draft.get("items", [])
     if not items:
