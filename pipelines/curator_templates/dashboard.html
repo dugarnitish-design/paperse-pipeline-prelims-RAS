@@ -12,7 +12,7 @@
             min-height: 100vh; padding: 20px;
         }
         .container {
-            max-width: 900px; margin: 0 auto; background: white;
+            max-width: 920px; margin: 0 auto; background: white;
             border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden;
         }
         .header {
@@ -24,23 +24,31 @@
         .header .meta { font-size: 14px; opacity: 0.85; margin-top: 4px; }
         .status-badge {
             padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;
-            background: rgba(255,255,255,0.2); color: white;
+            background: rgba(255,255,255,0.2); color: white; text-transform: uppercase;
         }
         .content { padding: 28px 30px; }
         .error {
             background: #fef2f2; color: #dc2626; padding: 14px 18px;
             border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #dc2626;
         }
+
+        /* ── Sticky selection bar ── */
         .selection-bar {
+            position: sticky; top: 0; z-index: 50;
             background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;
             padding: 12px 16px; margin-bottom: 24px; font-size: 14px; color: #1e40af;
-            display: flex; align-items: center; gap: 8px;
+            display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
         }
+        .selection-bar.warn { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
         .selection-bar strong { font-size: 20px; }
-        .section { margin-bottom: 36px; }
+        .sel-warn { font-weight: 600; display: none; }
+        .selection-bar.warn .sel-warn { display: inline; }
+        .selection-bar.warn .sel-ok { display: none; }
+
+        .section { margin-bottom: 30px; }
         .section-title {
             font-size: 16px; font-weight: 700; color: #374151;
-            margin-bottom: 14px; padding-bottom: 8px;
+            margin-bottom: 6px; padding-bottom: 8px;
             border-bottom: 2px solid #e5e7eb;
             display: flex; align-items: center; gap: 8px;
         }
@@ -48,6 +56,9 @@
             background: #667eea; color: white;
             font-size: 12px; padding: 2px 8px; border-radius: 12px;
         }
+        .section-title .count.also { background: #fb923c; }
+        .section-hint { font-size: 12px; color: #9ca3af; margin: 6px 0 14px; }
+
         /* ── Item card ── */
         .item {
             border: 2px solid #e5e7eb; border-radius: 10px; padding: 16px 18px;
@@ -56,84 +67,75 @@
         .item:hover { border-color: #667eea; background: white; box-shadow: 0 2px 12px rgba(102,126,234,0.12); }
         .item.is-checked { border-color: #667eea; background: #f5f3ff; }
         .item.is-rejected { border-color: #fca5a5; background: #fff5f5; }
+        .item.is-promoted { border-color: #16a34a; background: #f0fdf4; }
         .item-row { display: flex; align-items: flex-start; gap: 14px; }
         .item-checkbox { width: 22px; height: 22px; margin-top: 4px; cursor: pointer; accent-color: #667eea; flex-shrink: 0; }
+        .also-check { accent-color: #16a34a; }
         .item-body { flex: 1; min-width: 0; }
+
+        .promoted-flag {
+            display: none; font-size: 11px; font-weight: 700; color: #16a34a;
+            background: #dcfce7; padding: 2px 8px; border-radius: 10px; margin-left: 6px;
+        }
+        .item.is-promoted .promoted-flag { display: inline-block; }
 
         /* ── Editable fields ── */
         .field-row { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 6px; }
         .field-edit-btn {
             background: none; border: none; cursor: pointer; padding: 2px 4px;
-            color: #9ca3af; font-size: 13px; border-radius: 4px; flex-shrink: 0;
-            transition: all 0.1s; margin-top: 1px;
+            color: #9ca3af; font-size: 13px; border-radius: 4px; flex-shrink: 0; margin-top: 1px;
         }
         .field-edit-btn:hover { color: #667eea; background: #eff6ff; }
-        .field-edit-btn.active { color: #667eea; }
-        .item-title-text {
-            font-size: 16px; font-weight: 600; color: #111827; line-height: 1.4;
-        }
+        .item-title-text { font-size: 16px; font-weight: 600; color: #111827; line-height: 1.4; }
         .item-summary-text {
-            font-size: 13px; color: #6b7280; line-height: 1.5;
+            font-size: 13px; color: #6b7280; line-height: 1.5; margin-top: 2px;
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
         }
+        .item-summary-text.expanded { -webkit-line-clamp: unset; }
         .edit-input {
             width: 100%; border: 1.5px solid #667eea; border-radius: 6px;
             padding: 6px 10px; font-family: inherit; background: white;
-            outline: none; resize: vertical;
-            font-size: 14px; color: #111827; line-height: 1.5;
+            outline: none; resize: vertical; font-size: 14px; color: #111827; line-height: 1.5;
         }
         .edit-input:focus { box-shadow: 0 0 0 3px rgba(102,126,234,0.15); }
         .title-input { font-weight: 600; }
-        .edit-hint { font-size: 11px; color: #9ca3af; margin-top: 3px; }
+
+        /* ── Tags ── */
+        .item-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+        .tag { padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+        .tag-score { background: #e0e7ff; color: #4338ca; }
+        .tag-category { background: #dcfce7; color: #166534; }
+        .tag-edited { background: #fef3c7; color: #92400e; display: none; }
+        .tag-edited.show { display: inline-block; }
 
         /* ── Rejection reason ── */
         .rejection-box {
             display: none; margin-top: 10px;
             background: #fff1f2; border: 1.5px solid #fca5a5;
-            border-radius: 8px; padding: 10px 14px;
-            animation: slideDown 0.2s ease;
+            border-radius: 8px; padding: 10px 14px; animation: slideDown 0.2s ease;
         }
         .rejection-box.visible { display: block; }
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-6px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-        .rejection-label {
-            font-size: 12px; font-weight: 600; color: #dc2626; margin-bottom: 6px;
-        }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+        .rejection-label { font-size: 12px; font-weight: 600; color: #dc2626; margin-bottom: 6px; }
+        .rejection-label .req { color: #b91c1c; }
         .rejection-options { display: flex; flex-wrap: wrap; gap: 6px; }
         .reason-btn {
             padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600;
             border: 1.5px solid #fca5a5; background: white; color: #9f1239;
             cursor: pointer; transition: all 0.1s;
         }
-        .reason-btn:hover, .reason-btn.selected {
-            background: #dc2626; color: white; border-color: #dc2626;
-        }
+        .reason-btn:hover, .reason-btn.selected { background: #dc2626; color: white; border-color: #dc2626; }
         .reason-other-input {
             width: 100%; margin-top: 8px; border: 1.5px solid #fca5a5; border-radius: 6px;
-            padding: 5px 10px; font-family: inherit; font-size: 12px;
-            display: none; outline: none;
+            padding: 5px 10px; font-family: inherit; font-size: 12px; display: none; outline: none;
         }
         .reason-other-input.visible { display: block; }
-
-        /* ── Tags ── */
-        .item-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-        .tag { padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
-        .tag-score { background: #e0e7ff; color: #4338ca; }
-        .tag-source { background: #f3e8ff; color: #7c3aed; }
-        .tag-category { background: #dcfce7; color: #166534; }
-        .tag-edited { background: #fef3c7; color: #92400e; }
-
-        /* ── Candidates ── */
-        .candidates-box {
-            border: 2px dashed #fb923c; border-radius: 10px;
-            padding: 18px; background: #fffbf0;
-        }
-        .candidates-note { color: #ea580c; font-size: 13px; font-weight: 600; margin-bottom: 14px; }
+        .reason-learned { font-size: 11px; color: #16a34a; font-weight: 600; margin-top: 6px; display: none; }
+        .reason-learned.show { display: block; }
 
         /* ── Action bar ── */
         .action-bar {
-            display: flex; gap: 12px; justify-content: flex-end;
+            display: flex; gap: 12px; justify-content: flex-end; align-items: center;
             padding-top: 20px; border-top: 1px solid #e5e7eb; margin-top: 20px;
         }
         .btn {
@@ -143,17 +145,17 @@
         .btn-approve { background: white; color: #667eea; border: 2px solid #667eea; }
         .btn-approve:hover { background: #eff6ff; }
         .btn-publish { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-        .btn-publish:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(102,126,234,0.35); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+        .btn-publish:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(102,126,234,0.35); }
+        .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
 
         .toast {
             position: fixed; bottom: 24px; right: 24px;
             padding: 14px 20px; border-radius: 8px; font-size: 14px; font-weight: 600;
-            color: white; z-index: 9999; display: none; min-width: 260px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            color: white; z-index: 9999; display: none; min-width: 260px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);
         }
         .toast.success { background: #16a34a; }
         .toast.error   { background: #dc2626; }
+        .toast.info     { background: #2563eb; }
 
         @media (max-width: 600px) {
             .content { padding: 20px; }
@@ -169,128 +171,74 @@
             <h1>Curator Dashboard</h1>
             <div class="meta">Daily CA — {{ date }}</div>
         </div>
-        {% if draft_status %}
-        <div class="status-badge">{{ draft_status | upper }}</div>
-        {% endif %}
+        {% if draft_status %}<div class="status-badge">{{ draft_status }}</div>{% endif %}
     </div>
     <div class="content">
-        {% if error %}
-        <div class="error">{{ error }}</div>
-        {% endif %}
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
 
-        <div class="selection-bar">
-            ✅ Publishing <strong id="selCount">5</strong> items
-            · Click ✏️ to edit title/summary · Uncheck to reject
+        <div class="selection-bar" id="selBar">
+            <span class="sel-ok">✅ Publishing <strong id="selCount">{{ main_items | length }}</strong> items</span>
+            <span class="sel-warn">⚠️ <strong id="selCountWarn">0</strong>/3 — Select at least 3 items to publish</span>
+            <span style="margin-left:auto; opacity:.8">Uncheck a Top-5 item to reject · check an Also-in-News item to promote it</span>
         </div>
 
         <form id="curatorForm">
-            <!-- ── Selected items ── -->
+            <!-- ── TOP 5 (main) ── -->
             <div class="section">
                 <div class="section-title">
-                    Selected Items
-                    <span class="count">{{ selected_items | length }}</span>
+                    Top 5 — Main Items
+                    <span class="count" id="mainCount">{{ main_items | length }}</span>
                 </div>
-
-                {% for item in selected_items %}
-                {% set idx = loop.index0 %}
-                {% set title = (item.title or item.title_en or "(no title)") | replace("**", "") %}
-                {% set summary = item.summary or item.summary_en or "" %}
-
-                <div class="item is-checked" id="item-{{ idx }}">
-                    <div class="item-row">
-                        <input class="item-checkbox sel-check"
-                               type="checkbox"
-                               name="selected_items"
-                               value="{{ idx }}"
-                               data-idx="{{ idx }}"
-                               checked>
-                        <div class="item-body">
-
-                            <!-- Title row -->
-                            <div class="field-row">
-                                <div style="flex:1">
-                                    <div class="item-title-text" id="title-text-{{ idx }}">{{ title }}</div>
-                                    <textarea class="edit-input title-input"
-                                              id="title-edit-{{ idx }}"
-                                              name="title_edit_{{ idx }}"
-                                              rows="2"
-                                              style="display:none">{{ title }}</textarea>
-                                </div>
-                                <button type="button" class="field-edit-btn"
-                                        onclick="toggleEdit('title', {{ idx }})"
-                                        title="Edit title">✏️</button>
-                            </div>
-
-                            <!-- Summary row -->
-                            <div class="field-row">
-                                <div style="flex:1">
-                                    <div class="item-summary-text" id="summary-text-{{ idx }}">{{ summary }}</div>
-                                    <textarea class="edit-input"
-                                              id="summary-edit-{{ idx }}"
-                                              name="summary_edit_{{ idx }}"
-                                              rows="3"
-                                              style="display:none">{{ summary }}</textarea>
-                                </div>
-                                <button type="button" class="field-edit-btn"
-                                        onclick="toggleEdit('summary', {{ idx }})"
-                                        title="Edit summary">✏️</button>
-                            </div>
-
-                            <!-- Tags -->
-                            <div class="item-tags">
-                                <span class="tag tag-score">Score: {{ item.priority or item.final_priority_score or "—" }}</span>
-                                <span class="tag tag-source">{{ item.source or 'Unknown' }}</span>
-                                {% if item.category %}<span class="tag tag-category">{{ item.category }}</span>{% endif %}
-                                <span class="tag tag-edited" id="edited-tag-{{ idx }}" style="display:none">✏️ Edited</span>
-                            </div>
-
-                            <!-- Rejection reason (hidden until unchecked) -->
-                            <div class="rejection-box" id="reject-box-{{ idx }}">
-                                <div class="rejection-label">📌 Why rejecting this item?</div>
-                                <div class="rejection-options">
-                                    <button type="button" class="reason-btn" data-idx="{{ idx }}" data-reason="Too regional">🗺️ Too regional</button>
-                                    <button type="button" class="reason-btn" data-idx="{{ idx }}" data-reason="Not RAS-relevant">❌ Not RAS-relevant</button>
-                                    <button type="button" class="reason-btn" data-idx="{{ idx }}" data-reason="Already covered">🔄 Already covered</button>
-                                    <button type="button" class="reason-btn" data-idx="{{ idx }}" data-reason="Low quality">📉 Low quality</button>
-                                    <button type="button" class="reason-btn" data-idx="{{ idx }}" data-reason="Too generic">🔍 Too generic</button>
-                                    <button type="button" class="reason-btn" data-idx="{{ idx }}" data-reason="Other">💬 Other</button>
-                                </div>
-                                <input type="text" class="reason-other-input" id="reason-other-{{ idx }}"
-                                       placeholder="Describe reason..." maxlength="100">
-                                <input type="hidden" name="rejection_reason_{{ idx }}" id="rejection-reason-{{ idx }}" value="">
-                            </div>
-
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-
-            <!-- ── Candidate items ── -->
-            {% if candidate_items %}
-            <div class="section">
-                <div class="section-title">
-                    Add to Replace?
-                    <span class="count" style="background:#fb923c">{{ candidate_items | length }}</span>
-                </div>
-                <div class="candidates-box">
-                    <div class="candidates-note">☑ Check any item below to add it to the final selection</div>
-                    {% for item in candidate_items %}
-                    {% set ridx = 5 + loop.index0 %}
-                    <div class="item" id="item-{{ ridx }}">
+                <div class="section-hint">Checked = published. Uncheck to reject (a reason is required and is learned by RAG immediately).</div>
+                <div id="mainList">
+                    {% for item in main_items %}
+                    {% set iid = item.id %}
+                    {% set title = (item.title or item.title_en or "(no title)") | replace("**", "") %}
+                    {% set summary = item.summary or item.summary_en or "" %}
+                    <div class="item is-checked" data-section="main">
                         <div class="item-row">
-                            <input class="item-checkbox rep-check"
-                                   type="checkbox"
-                                   name="replacement_items"
-                                   value="{{ ridx }}"
-                                   data-idx="{{ ridx }}">
+                            <input class="item-checkbox main-check"
+                                   type="checkbox" name="selected_ids" value="{{ iid }}" checked
+                                   data-id="{{ iid }}"
+                                   data-title="{{ title }}"
+                                   data-category="{{ item.category or '' }}"
+                                   data-topic="{{ item.topic or '' }}"
+                                   data-summary="{{ summary }}">
                             <div class="item-body">
-                                <div class="item-title-text">{{ (item.title or item.title_en or "(no title)") | replace("**", "") }}</div>
-                                <div class="item-summary-text" style="margin-top:4px">{{ item.summary or item.summary_en or "" }}</div>
+                                <div class="field-row">
+                                    <div style="flex:1">
+                                        <div class="item-title-text" id="title-text-{{ iid }}">{{ title }}</div>
+                                        <textarea class="edit-input title-input" id="title-edit-{{ iid }}"
+                                                  name="title_edit_{{ iid }}" rows="2" style="display:none">{{ title }}</textarea>
+                                    </div>
+                                    <button type="button" class="field-edit-btn" onclick="toggleEdit('title','{{ iid }}')" title="Edit title">✏️</button>
+                                </div>
+                                <div class="field-row">
+                                    <div style="flex:1">
+                                        <div class="item-summary-text" id="summary-text-{{ iid }}">{{ summary }}</div>
+                                        <textarea class="edit-input" id="summary-edit-{{ iid }}"
+                                                  name="summary_edit_{{ iid }}" rows="3" style="display:none">{{ summary }}</textarea>
+                                    </div>
+                                    <button type="button" class="field-edit-btn" onclick="toggleEdit('summary','{{ iid }}')" title="Edit summary">✏️</button>
+                                </div>
                                 <div class="item-tags">
-                                    <span class="tag tag-score">Score: {{ item.priority or item.final_priority_score or "—" }}</span>
-                                    <span class="tag tag-source">{{ item.source or 'Unknown' }}</span>
+                                    <span class="tag tag-score">Score: {{ item.priority if item.priority is not none else (item.final_priority_score if item.final_priority_score is not none else "—") }}</span>
                                     {% if item.category %}<span class="tag tag-category">{{ item.category }}</span>{% endif %}
+                                    <span class="tag tag-edited" id="edited-tag-{{ iid }}">✏️ Edited</span>
+                                </div>
+                                <div class="rejection-box" id="reject-box-{{ iid }}">
+                                    <div class="rejection-label">📌 Why rejecting this item? <span class="req">(required)</span></div>
+                                    <div class="rejection-options">
+                                        <button type="button" class="reason-btn" data-id="{{ iid }}" data-reason="Party politics">🏛️ Party politics</button>
+                                        <button type="button" class="reason-btn" data-id="{{ iid }}" data-reason="Not RAS-relevant">❌ Not RAS-relevant</button>
+                                        <button type="button" class="reason-btn" data-id="{{ iid }}" data-reason="Incomplete story">🧩 Incomplete story</button>
+                                        <button type="button" class="reason-btn" data-id="{{ iid }}" data-reason="Too generic">🔍 Too generic</button>
+                                        <button type="button" class="reason-btn" data-id="{{ iid }}" data-reason="Old news">📰 Old news</button>
+                                        <button type="button" class="reason-btn" data-id="{{ iid }}" data-reason="Other">💬 Other</button>
+                                    </div>
+                                    <input type="text" class="reason-other-input" id="reason-other-{{ iid }}" placeholder="Describe reason..." maxlength="100">
+                                    <input type="hidden" name="rejection_reason_{{ iid }}" id="rejection-reason-{{ iid }}" value="">
+                                    <div class="reason-learned" id="reason-learned-{{ iid }}">✓ Saved — RAG updated (category &amp; topic scores lowered)</div>
                                 </div>
                             </div>
                         </div>
@@ -298,15 +246,60 @@
                     {% endfor %}
                 </div>
             </div>
-            {% endif %}
+
+            <!-- ── ALSO-IN-NEWS (candidates to promote) ── -->
+            <div class="section">
+                <div class="section-title">
+                    Also-in-News
+                    <span class="count also" id="alsoCount">{{ also_items | length }}</span>
+                </div>
+                <div class="section-hint">☑ Check any item to <strong>promote it into the Top 5</strong> (fills a slot opened by an unchecked main item).</div>
+                <div id="alsoList">
+                    {% for item in also_items %}
+                    {% set iid = item.id %}
+                    {% set title = (item.title or item.title_en or "(no title)") | replace("**", "") %}
+                    {% set summary = item.summary or item.summary_en or "" %}
+                    <div class="item" data-section="also">
+                        <div class="item-row">
+                            <input class="item-checkbox also-check"
+                                   type="checkbox" name="selected_ids" value="{{ iid }}"
+                                   data-id="{{ iid }}"
+                                   data-title="{{ title }}"
+                                   data-category="{{ item.category or '' }}"
+                                   data-topic="{{ item.topic or '' }}"
+                                   data-summary="{{ summary }}">
+                            <div class="item-body">
+                                <div class="field-row">
+                                    <div style="flex:1">
+                                        <div class="item-title-text" id="title-text-{{ iid }}">{{ title }}<span class="promoted-flag">▲ Promoted to Top 5</span></div>
+                                        <textarea class="edit-input title-input" id="title-edit-{{ iid }}"
+                                                  name="title_edit_{{ iid }}" rows="2" style="display:none">{{ title }}</textarea>
+                                    </div>
+                                    <button type="button" class="field-edit-btn" onclick="toggleEdit('title','{{ iid }}')" title="Edit title">✏️</button>
+                                </div>
+                                <div class="field-row">
+                                    <div style="flex:1">
+                                        <div class="item-summary-text" id="summary-text-{{ iid }}">{{ summary }}</div>
+                                        <textarea class="edit-input" id="summary-edit-{{ iid }}"
+                                                  name="summary_edit_{{ iid }}" rows="3" style="display:none">{{ summary }}</textarea>
+                                    </div>
+                                    <button type="button" class="field-edit-btn" onclick="toggleEdit('summary','{{ iid }}')" title="Edit summary">✏️</button>
+                                </div>
+                                <div class="item-tags">
+                                    <span class="tag tag-score">Score: {{ item.priority if item.priority is not none else (item.final_priority_score if item.final_priority_score is not none else "—") }}</span>
+                                    {% if item.category %}<span class="tag tag-category">{{ item.category }}</span>{% endif %}
+                                    <span class="tag tag-edited" id="edited-tag-{{ iid }}">✏️ Edited</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
 
             <div class="action-bar">
-                <button type="button" class="btn btn-approve" id="btnApprove">
-                    ✅ Approve As-Is
-                </button>
-                <button type="button" class="btn btn-publish" id="btnPublish">
-                    🚀 Publish with Selection
-                </button>
+                <button type="button" class="btn btn-approve" id="btnApprove">✅ Approve Top 5 As-Is</button>
+                <button type="button" class="btn btn-publish" id="btnPublish">🚀 Publish with Selection</button>
             </div>
         </form>
     </div>
@@ -315,167 +308,208 @@
 
 <script>
 const date = "{{ date }}";
-const selChecks = document.querySelectorAll('.sel-check');
-const repChecks = document.querySelectorAll('.rep-check');
-const selCountEl = document.getElementById('selCount');
+const MIN_PUBLISH = 3;
+const mainList = document.getElementById('mainList');
+const selBar = document.getElementById('selBar');
+const btnPublish = document.getElementById('btnPublish');
+const learned = new Set();   // item ids whose rejection has been sent to RAG
 
-// ── Count selected items ──────────────────────────────────────────────────
+function allChecks() { return Array.from(document.querySelectorAll('.item-checkbox')); }
+function selectedCount() { return allChecks().filter(c => c.checked).length; }
+
+// ── Selection bar + publish-gate ──────────────────────────────────────────
 function updateCount() {
-    const sel = Array.from(selChecks).filter(c => c.checked).length;
-    const rep = Array.from(repChecks).filter(c => c.checked).length;
-    selCountEl.textContent = sel + rep;
+    const n = selectedCount();
+    document.getElementById('selCount').textContent = n;
+    document.getElementById('selCountWarn').textContent = n;
+    document.getElementById('mainCount').textContent = mainList.querySelectorAll('.main-check').length;
+    // Also-in-News badge = bench items NOT yet promoted (decrements on each promote)
+    document.getElementById('alsoCount').textContent =
+        document.querySelectorAll('.also-check:not(:checked)').length;
+    const ok = n >= MIN_PUBLISH;
+    selBar.classList.toggle('warn', !ok);
+    btnPublish.disabled = !ok;
+    btnPublish.title = ok ? '' : `Select at least ${MIN_PUBLISH} items`;
 }
 
-// ── Checkbox → show/hide rejection box ───────────────────────────────────
-selChecks.forEach(c => {
+// ── Main item uncheck → reject box (reason REQUIRED) ─────────────────────
+document.querySelectorAll('.main-check').forEach(c => {
     c.addEventListener('change', () => {
         const item = c.closest('.item');
+        const box = document.getElementById(`reject-box-${c.dataset.id}`);
         item.classList.toggle('is-checked', c.checked);
         item.classList.toggle('is-rejected', !c.checked);
-        const rejectBox = document.getElementById(`reject-box-${c.dataset.idx}`);
-        if (rejectBox) {
-            rejectBox.classList.toggle('visible', !c.checked);
-            if (c.checked) {
-                // Clear rejection reason when re-checked
-                const hidden = document.getElementById(`rejection-reason-${c.dataset.idx}`);
-                if (hidden) hidden.value = '';
-                rejectBox.querySelectorAll('.reason-btn').forEach(b => b.classList.remove('selected'));
+        if (box) {
+            box.classList.toggle('visible', !c.checked);
+            if (c.checked) {  // re-checked → clear reason (but RAG learning already happened, not undone)
+                document.getElementById(`rejection-reason-${c.dataset.id}`).value = '';
+                box.querySelectorAll('.reason-btn').forEach(b => b.classList.remove('selected'));
+                document.getElementById(`reason-learned-${c.dataset.id}`).classList.remove('show');
             }
         }
         updateCount();
     });
 });
 
-repChecks.forEach(c => {
+// ── Also-in-News check → promote into Top 5 (move DOM node up) ────────────
+document.querySelectorAll('.also-check').forEach(c => {
     c.addEventListener('change', () => {
-        c.closest('.item').classList.toggle('is-checked', c.checked);
+        const item = c.closest('.item');
+        if (c.checked) {
+            item.classList.add('is-promoted');
+            mainList.appendChild(item);      // physically moves it into the Top-5 section
+        } else {
+            item.classList.remove('is-promoted');
+            document.getElementById('alsoList').appendChild(item);  // moves back down
+        }
         updateCount();
     });
 });
 
-// ── Rejection reason buttons ──────────────────────────────────────────────
+// ── Rejection reason buttons → record immediately (RAG learns NOW) ────────
 document.querySelectorAll('.reason-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-        const idx = btn.dataset.idx;
+        const id = btn.dataset.id;
         const reason = btn.dataset.reason;
-        // Deselect siblings
-        document.querySelectorAll(`.reason-btn[data-idx="${idx}"]`).forEach(b => b.classList.remove('selected'));
+        document.querySelectorAll(`.reason-btn[data-id="${id}"]`).forEach(b => b.classList.remove('selected'));
         btn.classList.add('selected');
-        // Handle "Other"
-        const otherInput = document.getElementById(`reason-other-${idx}`);
-        const hiddenInput = document.getElementById(`rejection-reason-${idx}`);
+        const otherInput = document.getElementById(`reason-other-${id}`);
+        const hidden = document.getElementById(`rejection-reason-${id}`);
         if (reason === 'Other') {
-            otherInput.classList.add('visible');
-            otherInput.focus();
-            otherInput.addEventListener('input', () => { hiddenInput.value = otherInput.value || 'Other'; });
-            hiddenInput.value = 'Other';
+            otherInput.classList.add('visible'); otherInput.focus();
+            hidden.value = 'Other';
+            otherInput.oninput = () => { hidden.value = otherInput.value || 'Other'; };
+            // For "Other", record on blur so the text is captured
+            otherInput.onblur = () => sendRejection(id, hidden.value);
         } else {
             otherInput.classList.remove('visible');
-            hiddenInput.value = reason;
+            hidden.value = reason;
+            sendRejection(id, reason);
         }
     });
 });
 
+async function sendRejection(id, reason) {
+    if (!reason) return;
+    const cb = document.querySelector(`.item-checkbox[data-id="${id}"]`);
+    try {
+        const r = await fetch(`/curator/${date}/reject`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                id, reason,
+                title: cb?.dataset.title || '',
+                category: cb?.dataset.category || '',
+                topic: cb?.dataset.topic || '',
+                summary: cb?.dataset.summary || '',
+            }),
+        });
+        const d = await r.json();
+        if (r.ok) {
+            learned.add(String(id));
+            document.getElementById(`reason-learned-${id}`).classList.add('show');
+            const cat = d.learning?.category_update?.category || cb?.dataset.category || 'category';
+            showToast(`✓ RAG learned — "${cat}" weight lowered`, 'success');
+        } else {
+            showToast('⚠ Could not save rejection: ' + (d.error || 'unknown'), 'error');
+        }
+    } catch (e) { showToast('Network error saving rejection', 'error'); }
+}
+
 // ── Inline editing ────────────────────────────────────────────────────────
-function toggleEdit(field, idx) {
-    const textEl  = document.getElementById(`${field}-text-${idx}`);
-    const editEl  = document.getElementById(`${field}-edit-${idx}`);
-    const editedTag = document.getElementById(`edited-tag-${idx}`);
+function toggleEdit(field, id) {
+    const textEl = document.getElementById(`${field}-text-${id}`);
+    const editEl = document.getElementById(`${field}-edit-${id}`);
+    const editedTag = document.getElementById(`edited-tag-${id}`);
     const isEditing = editEl.style.display !== 'none';
     if (isEditing) {
-        // Save
         const newVal = editEl.value.trim();
+        // keep the promoted-flag span if present (title field)
+        const flag = textEl.querySelector('.promoted-flag');
         textEl.textContent = newVal || textEl.textContent;
-        editEl.style.display = 'none';
-        textEl.style.display = '';
-        if (editedTag) editedTag.style.display = 'inline-block';
+        if (flag) textEl.appendChild(flag);
+        editEl.style.display = 'none'; textEl.style.display = '';
+        if (editedTag) editedTag.classList.add('show');
     } else {
-        // Open editor
-        editEl.value = textEl.textContent.trim();
-        editEl.style.display = 'block';
-        textEl.style.display = 'none';
-        editEl.focus();
+        editEl.value = (textEl.childNodes[0]?.textContent || textEl.textContent).trim();
+        editEl.style.display = 'block'; textEl.style.display = 'none'; editEl.focus();
     }
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────
+let toastTimer;
 function showToast(msg, type) {
     const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.className = 'toast ' + type;
-    t.style.display = 'block';
-    setTimeout(() => t.style.display = 'none', 5000);
+    t.textContent = msg; t.className = 'toast ' + type; t.style.display = 'block';
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.display = 'none', 4000);
 }
 
-// ── Build FormData (include edits + rejection reasons) ────────────────────
-function getFormData(action) {
+// ── Build FormData for publish ────────────────────────────────────────────
+function getFormData() {
     const fd = new FormData();
-
-    // Selected & replacement items
-    selChecks.forEach(c => { if (c.checked) fd.append('selected_items', c.value); });
-    repChecks.forEach(c => { if (c.checked) fd.append('replacement_items', c.value); });
-
-    // Edited titles & summaries (all items — server ignores unchanged)
-    selChecks.forEach(c => {
-        const idx = c.dataset.idx;
-        const titleEdit   = document.getElementById(`title-edit-${idx}`);
-        const summaryEdit = document.getElementById(`summary-edit-${idx}`);
-        const titleText   = document.getElementById(`title-text-${idx}`);
-        const summaryText = document.getElementById(`summary-text-${idx}`);
-        // Use textarea value if open, else the displayed text
-        fd.append(`title_edit_${idx}`,   titleEdit?.style.display !== 'none'   ? titleEdit.value   : titleText?.textContent  || '');
-        fd.append(`summary_edit_${idx}`, summaryEdit?.style.display !== 'none' ? summaryEdit.value : summaryText?.textContent || '');
-        // Rejection reasons for unchecked items
-        const reason = document.getElementById(`rejection-reason-${idx}`)?.value;
-        if (reason) fd.append(`rejection_reason_${idx}`, reason);
+    allChecks().forEach(c => { if (c.checked) fd.append('selected_ids', c.value); });
+    // edits for every (checked) item
+    allChecks().forEach(c => {
+        if (!c.checked) return;
+        const id = c.dataset.id;
+        const te = document.getElementById(`title-edit-${id}`);
+        const se = document.getElementById(`summary-edit-${id}`);
+        const tt = document.getElementById(`title-text-${id}`);
+        const st = document.getElementById(`summary-text-${id}`);
+        const titleVal = te?.style.display !== 'none' ? te.value : (tt?.childNodes[0]?.textContent || tt?.textContent || '');
+        const summaryVal = se?.style.display !== 'none' ? se.value : (st?.textContent || '');
+        fd.append(`title_edit_${id}`, titleVal.trim());
+        fd.append(`summary_edit_${id}`, summaryVal.trim());
     });
-
-    fd.append('action', action);
     return fd;
 }
 
-// ── Approve As-Is ─────────────────────────────────────────────────────────
+// ── Validate: every unchecked main item needs a reason ───────────────────
+function missingReasons() {
+    const missing = [];
+    document.querySelectorAll('.main-check').forEach(c => {
+        if (!c.checked) {
+            const reason = document.getElementById(`rejection-reason-${c.dataset.id}`)?.value;
+            if (!reason) missing.push(c.dataset.title || c.dataset.id);
+        }
+    });
+    return missing;
+}
+
+// ── Approve Top 5 As-Is ───────────────────────────────────────────────────
 document.getElementById('btnApprove').addEventListener('click', async () => {
-    if (!confirm('Approve and publish top 5 items as-is?')) return;
+    if (!confirm('Approve and publish the original Top 5 as-is?')) return;
     const btn = document.getElementById('btnApprove');
     btn.disabled = true; btn.textContent = 'Publishing…';
     try {
-        const r = await fetch(`/curator/${date}/approve`, {method:'POST', body: getFormData('approve')});
+        const r = await fetch(`/curator/${date}/approve`, {method:'POST'});
         const d = await r.json();
-        if (r.ok) {
-            showToast('✅ Published to channel!', 'success');
-            btn.textContent = '✅ Published';
-        } else {
-            showToast('⚠ Error: ' + (d.error || 'unknown'), 'error');
-            btn.disabled = false; btn.textContent = '✅ Approve As-Is';
-        }
-    } catch(e) {
-        showToast('Network error', 'error');
-        btn.disabled = false; btn.textContent = '✅ Approve As-Is';
-    }
+        if (r.ok) { showToast('✅ Published to channel!', 'success'); btn.textContent = '✅ Published'; }
+        else { showToast('⚠ ' + (d.error || 'unknown'), 'error'); btn.disabled = false; btn.textContent = '✅ Approve Top 5 As-Is'; }
+    } catch(e) { showToast('Network error', 'error'); btn.disabled = false; btn.textContent = '✅ Approve Top 5 As-Is'; }
 });
 
 // ── Publish with Selection ────────────────────────────────────────────────
-document.getElementById('btnPublish').addEventListener('click', async () => {
-    const sel = Array.from(selChecks).filter(c => c.checked).length;
-    const rep = Array.from(repChecks).filter(c => c.checked).length;
-    if (sel + rep === 0) { alert('Select at least 1 item'); return; }
-    const btn = document.getElementById('btnPublish');
-    btn.disabled = true; btn.textContent = 'Publishing…';
+btnPublish.addEventListener('click', async () => {
+    const n = selectedCount();
+    if (n < MIN_PUBLISH) { showToast(`Select at least ${MIN_PUBLISH} items`, 'error'); return; }
+    const missing = missingReasons();
+    if (missing.length) { showToast(`Pick a reject reason for: ${missing.join(', ')}`, 'error'); return; }
+    if (!confirm(`Publish ${n} selected items to the channel?`)) return;
+    btnPublish.disabled = true; btnPublish.textContent = 'Publishing…';
     try {
-        const r = await fetch(`/curator/${date}/publish`, {method:'POST', body: getFormData('publish')});
+        const r = await fetch(`/curator/${date}/publish`, {method:'POST', body: getFormData()});
         const d = await r.json();
         if (r.ok) {
-            const msg = `✅ Published! (${d.kept} kept, ${d.added} added, ${d.rejected} rejected${d.edited ? ', edits saved' : ''})`;
-            showToast(msg, 'success');
-            btn.textContent = '✅ Published';
+            showToast(`✅ Published ${d.selected} items (${d.promoted} promoted, ${d.removed} removed${d.edited ? ', edits saved' : ''})`, 'success');
+            btnPublish.textContent = '✅ Published';
         } else {
-            showToast('⚠ Error: ' + (d.error || 'unknown'), 'error');
-            btn.disabled = false; btn.textContent = '🚀 Publish with Selection';
+            showToast('⚠ ' + (d.error || 'unknown'), 'error');
+            btnPublish.disabled = false; btnPublish.textContent = '🚀 Publish with Selection';
         }
     } catch(e) {
         showToast('Network error', 'error');
-        btn.disabled = false; btn.textContent = '🚀 Publish with Selection';
+        btnPublish.disabled = false; btnPublish.textContent = '🚀 Publish with Selection';
     }
 });
 

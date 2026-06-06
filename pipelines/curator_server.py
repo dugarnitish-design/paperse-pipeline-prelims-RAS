@@ -99,33 +99,74 @@ def curator_logout():
 
 # ── routes: dashboard ─────────────────────────────────────────────────────────
 
+def _fetch_items(date: str, is_main: bool, limit: int = 5) -> list:
+    """Load this day's EN items (main or also-in-news) straight from the DB."""
+    try:
+        return C.sb_select(
+            "daily_ca_items",
+            select="*",
+            params={
+                "date":     f"eq.{date}",
+                "language": "eq.EN",
+                "is_main":  f"eq.{'true' if is_main else 'false'}",
+                "order":    "priority.desc.nullslast",
+                "limit":    str(limit),
+            },
+        )
+    except Exception as e:
+        C.log(f"  ⚠ fetch {'main' if is_main else 'also'} items failed: {e}")
+        return []
+
+
 @app.route("/curator/<date>", methods=["GET"])
 @require_auth
 def curator_dashboard(date):
-    draft = load_draft(date)
-    if not draft:
+    draft  = load_draft(date)
+    status = (draft or {}).get("status", "pending")
+
+    # New flow: show the live TOP-5 (is_main) AND ALSO-IN-NEWS (5) side by side.
+    main_items = _fetch_items(date, is_main=True,  limit=5)
+    also_items = _fetch_items(date, is_main=False, limit=5)
+
+    if not main_items and not also_items:
         return render_template(
             "dashboard.html",
-            date=date,
-            selected_items=[],
-            candidate_items=[],
-            error=f"No draft found for {date}. Did the pipeline run?",
+            date=date, main_items=[], also_items=[], draft_status=status,
+            error=f"No items found for {date}. Did the pipeline run?",
         ), 404
-
-    items = draft.get("items", [])
-    status = draft.get("status", "pending")
-
-    selected  = items[:5]
-    candidates = items[5:8] if len(items) > 5 else []
 
     return render_template(
         "dashboard.html",
         date=date,
-        selected_items=selected,
-        candidate_items=candidates,
+        main_items=main_items,
+        also_items=also_items,
         draft_status=status,
         error=None,
     )
+
+
+@app.route("/curator/<date>/reject", methods=["POST"])
+@require_auth
+def reject_item(date):
+    """
+    Immediate per-item rejection (the curator unchecked a main item and picked a
+    reason). Records to curator_feedback AND lowers ca_categories.tier_weight +
+    topic_kb scores NOW — so RAG learns the moment the curator acts, not at publish.
+    """
+    data   = request.get_json(silent=True) or {}
+    reason = (data.get("reason") or "").strip()
+    if not reason:
+        return jsonify({"error": "rejection reason required"}), 400
+
+    result = learning.log_rejection(
+        item_title=data.get("title", ""),
+        category=data.get("category", ""),
+        rejected_text=data.get("summary", ""),
+        topic=data.get("topic", ""),
+        rejection_reason=reason,
+    )
+    C.log(f"  ✓ immediate reject learned: {(data.get('title') or '')[:40]} · {reason}")
+    return jsonify({"ok": True, "learning": result}), 200
 
 
 @app.route("/curator/<date>/approve", methods=["POST"])
@@ -157,134 +198,131 @@ def approve_without_edits(date):
     return jsonify({"status": "approved", "channel_posted": published, "date": date}), 200
 
 
+def _delete_with_hi(date: str, item: dict) -> None:
+    """Delete an EN item by id + its HI counterpart (matched on date+category+priority)."""
+    try:
+        if item.get("id"):
+            C.sb_delete("daily_ca_items", {"id": str(item["id"])})
+        C.sb_delete("daily_ca_items", {
+            "date": date, "language": "HI",
+            "category": item.get("category", ""), "priority": item.get("priority"),
+        })
+    except Exception as e:
+        C.log(f"  ⚠ could not remove item {item.get('id')}: {e}")
+
+
+def _set_main_with_hi(date: str, item: dict, is_main: bool) -> None:
+    """Flip is_main on an EN item + its HI counterpart (for promote/demote)."""
+    flag = "true" if is_main else "false"
+    try:
+        if item.get("id"):
+            C.sb_update("daily_ca_items", {"is_main": is_main}, {"id": str(item["id"])})
+        C.sb_update("daily_ca_items", {"is_main": is_main}, {
+            "date": date, "language": "HI",
+            "category": item.get("category", ""), "priority": item.get("priority"),
+        })
+    except Exception as e:
+        C.log(f"  ⚠ could not set is_main={flag} for {item.get('id')}: {e}")
+
+
 @app.route("/curator/<date>/publish", methods=["POST"])
 @require_auth
 def publish_with_edits(date):
     """
-    Approve with custom selection + optional edits + rejection reasons.
+    Publish a curator-chosen selection of items (the new flow).
+
     Form fields:
-      selected_items[]        — indices of top-5 items to KEEP (0-4)
-      replacement_items[]     — indices from items 5-7 to ADD
-      title_edit_N            — edited title for item N (if changed)
-      summary_edit_N          — edited summary for item N (if changed)
-      rejection_reason_N      — rejection reason for unchecked item N
+      selected_ids[]      — ids of items to PUBLISH (kept main + promoted also-in-news)
+      title_edit_<id>     — edited title for a selected item (if changed)
+      summary_edit_<id>   — edited summary for a selected item (if changed)
+
+    Rejection reasons are NOT sent here — they are learned immediately when the
+    curator unchecks an item (POST /curator/<date>/reject). This route applies the
+    final selection to the DB, regenerates the PDF with the selected items only,
+    and posts to the channel + PYQ polls.
     """
-    draft = load_draft(date)
-    if not draft:
-        return jsonify({"error": "Draft not found"}), 404
+    selected_ids = [str(i) for i in request.form.getlist("selected_ids")]
+    if len(selected_ids) < 3:
+        return jsonify({"error": "Select at least 3 items to publish"}), 400
 
-    all_items = draft.get("items", [])
-    kept_idx  = [int(i) for i in request.form.getlist("selected_items")]
-    added_idx = [int(i) for i in request.form.getlist("replacement_items")]
+    # Load the live main + also items so we can act by id.
+    main_items = _fetch_items(date, is_main=True,  limit=5)
+    also_items = _fetch_items(date, is_main=False, limit=5)
+    by_id = {str(it["id"]): it for it in (main_items + also_items)}
 
-    kept_items  = [all_items[i] for i in kept_idx if i < len(all_items)]
-    added_items = [all_items[i] for i in added_idx if i < len(all_items)]
+    sel_set      = set(selected_ids)
+    selected     = [by_id[i] for i in selected_ids if i in by_id]
+    promoted     = [it for it in also_items if str(it["id"]) in sel_set]   # also → main
+    removed      = [it for it in (main_items + also_items) if str(it["id"]) not in sel_set]
 
-    # Apply edits to kept items (update title/summary if changed)
-    edits_made = 0
-    for i, item in enumerate(all_items[:5]):
-        if i in kept_idx:
-            new_title   = request.form.get(f"title_edit_{i}", "").strip()
-            new_summary = request.form.get(f"summary_edit_{i}", "").strip()
-            orig_title   = (item.get("title") or item.get("title_en", "")).replace("**", "").strip()
-            orig_summary = (item.get("summary") or item.get("summary_en", "")).strip()
-            if new_title and new_title != orig_title:
-                item["title"] = new_title
-                edits_made += 1
-            if new_summary and new_summary != orig_summary:
-                item["summary"] = new_summary
-                edits_made += 1
-
-    # Rejected items → log with reason → RAG learns
-    for i, item in enumerate(all_items[:5]):
-        if i not in kept_idx:
-            reason = request.form.get(f"rejection_reason_{i}", "")
-            learning.log_rejection(
-                item_title=item.get("title") or item.get("title_en", ""),
-                category=item.get("category", ""),
-                rejected_text=item.get("summary") or item.get("summary_en", ""),
-                topic=item.get("topic", ""),
-                rejection_reason=reason,
-            )
-
-    # Candidates added → log replacement
-    for item in added_items:
+    # 1. Promote selected also-in-news items into the main set.
+    for it in promoted:
+        _set_main_with_hi(date, it, is_main=True)
         learning.log_replacement(
-            old_item_title="(candidate added)",
-            new_item_title=item.get("title") or item.get("title_en", ""),
-            category=item.get("category", ""),
+            old_item_title="(also-in-news promoted)",
+            new_item_title=it.get("title") or it.get("title_en", ""),
+            category=it.get("category", ""),
         )
 
-    # Approve kept items
-    for item in kept_items + added_items:
-        learning.log_approval(
-            item_title=item.get("title") or item.get("title_en", ""),
-            category=item.get("category", ""),
-        )
-
-    # ── Apply the curation to the DB + regenerate the PDF so REJECTED items are
-    #    truly gone from the website + PDF + channel, and EDITS are reflected. ──
-    rejected_items = [all_items[i] for i in range(min(5, len(all_items))) if i not in kept_idx]
-    changed = bool(rejected_items) or edits_made > 0
-
-    # 1. Persist title/summary edits to the kept items (EN rows)
-    for i in kept_idx:
-        if i >= len(all_items):
-            continue
-        item = all_items[i]
-        if not item.get("id"):
+    # 2. Apply title/summary edits to the selected items (EN rows).
+    edits_made = 0
+    for it in selected:
+        iid = str(it.get("id") or "")
+        if not iid:
             continue
         patch = {}
-        nt = request.form.get(f"title_edit_{i}", "").strip()
-        ns = request.form.get(f"summary_edit_{i}", "").strip()
-        if nt: patch["title"] = nt
-        if ns: patch["summary"] = ns
+        nt = request.form.get(f"title_edit_{iid}", "").strip()
+        ns = request.form.get(f"summary_edit_{iid}", "").strip()
+        orig_title   = (it.get("title") or it.get("title_en", "")).replace("**", "").strip()
+        orig_summary = (it.get("summary") or it.get("summary_en", "")).strip()
+        if nt and nt != orig_title:   patch["title"] = nt
+        if ns and ns != orig_summary: patch["summary"] = ns
         if patch:
             try:
-                C.sb_update("daily_ca_items", patch, {"id": str(item["id"])})
+                C.sb_update("daily_ca_items", patch, {"id": iid})
+                edits_made += 1
             except Exception as e:
-                C.log(f"  ⚠ edit update failed for id {item.get('id')}: {e}")
+                C.log(f"  ⚠ edit update failed for id {iid}: {e}")
 
-    # 2. Remove rejected items — EN row by id + the HI counterpart (matched on
-    #    date+category+priority, which is unique among the day's main items).
-    for item in rejected_items:
-        try:
-            if item.get("id"):
-                C.sb_delete("daily_ca_items", {"id": str(item["id"])})
-            C.sb_delete("daily_ca_items", {
-                "date": date, "language": "HI", "is_main": "true",
-                "category": item.get("category", ""), "priority": item.get("priority"),
-            })
-            C.log(f"  ✓ removed rejected item: {(item.get('title') or '')[:45]}")
-        except Exception as e:
-            C.log(f"  ⚠ could not remove rejected item: {e}")
+    # 3. Remove every unselected item (rejected mains + un-promoted also) so the
+    #    PDF + website + channel carry the SELECTED items only. Rejections were
+    #    already learned via /reject, so we only delete here (no double-learning).
+    for it in removed:
+        _delete_with_hi(date, it)
+        C.log(f"  ✓ removed unselected item: {(it.get('title') or '')[:45]}")
 
-    # 3. Regenerate the PDF from the now-curated DB (only if something changed)
-    if changed:
-        env = {**os.environ,
-               "DYLD_FALLBACK_LIBRARY_PATH": "/opt/homebrew/lib:" + os.environ.get("DYLD_FALLBACK_LIBRARY_PATH", "")}
-        C.log(f"  → Regenerating PDF for {date} ({len(kept_items)} kept, {len(rejected_items)} removed)")
-        rgen = subprocess.run([sys.executable, str(C.ROOT / "pipelines" / "pdf_generator.py"), date],
-                              cwd=str(C.ROOT), env=env, capture_output=True, text=True)
-        if rgen.returncode != 0:
-            C.log(f"  ⚠ PDF regen failed:\n{rgen.stderr[-300:]}")
+    # 4. Log approvals for the published set.
+    for it in selected:
+        learning.log_approval(
+            item_title=it.get("title") or it.get("title_en", ""),
+            category=it.get("category", ""),
+        )
 
-    final_indices = kept_idx + added_idx
+    # 5. Regenerate the PDF from the now-curated DB (selected items only).
+    env = {**os.environ,
+           "DYLD_FALLBACK_LIBRARY_PATH": "/opt/homebrew/lib:" + os.environ.get("DYLD_FALLBACK_LIBRARY_PATH", "")}
+    C.log(f"  → Regenerating PDF for {date} ({len(selected)} selected, "
+          f"{len(promoted)} promoted, {len(removed)} removed, {edits_made} edited)")
+    rgen = subprocess.run([sys.executable, str(C.ROOT / "pipelines" / "pdf_generator.py"), date],
+                          cwd=str(C.ROOT), env=env, capture_output=True, text=True)
+    if rgen.returncode != 0:
+        C.log(f"  ⚠ PDF regen failed:\n{rgen.stderr[-300:]}")
+
     mark_draft_status(date, "approved", {
         "approved_at": datetime.datetime.utcnow().isoformat() + "Z",
-        "approval_method": "dashboard_edited",
-        "selected_indices": final_indices,
+        "approval_method": "dashboard_selection",
+        "selected_ids": selected_ids,
     })
 
-    # Channel post — now posts the regenerated PDF (kept items only).
+    # 6. Channel post (regenerated PDF) + PYQ polls (fired inside _publish).
     published = _publish(date)
     return jsonify({
         "status": "approved",
         "channel_posted": published,
         "date": date,
-        "kept": len(kept_items),
-        "added": len(added_items),
-        "rejected": 5 - len(kept_items),
+        "selected": len(selected),
+        "promoted": len(promoted),
+        "removed": len(removed),
         "edited": edits_made,
     }), 200
 
