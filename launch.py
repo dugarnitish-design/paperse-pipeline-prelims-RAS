@@ -23,29 +23,24 @@ if SERVICE_MODE == "curator":
     print(f"Curator dashboard live on port {PORT}", flush=True)
     app.run(host="0.0.0.0", port=PORT, debug=False)
 else:
-    import datetime
     # ── Cron-only guard ───────────────────────────────────────────────────────
-    # Railway starts this container on EVERY deploy/restart as well as on the
-    # cron schedule. We only want the daily pipeline to fire on the cron — not on
-    # each git push. The cron runs at CRON_HOUR_UTC:00 (default 01:00 UTC =
-    # 06:30 IST). A start outside that window is a deploy/restart → exit 0.
-    #   • FORCE_RUN=true        → run regardless (manual test)
-    #   • an explicit date arg  → run regardless (e.g. `python3 launch.py 2026-06-05`)
-    force = os.environ.get("FORCE_RUN", "").lower() in ("1", "true", "yes")
-    has_arg = len(sys.argv) > 1
-    cron_hour = int(os.environ.get("CRON_HOUR_UTC", "1"))
-    window = int(os.environ.get("CRON_WINDOW_MIN", "20"))
-    now = datetime.datetime.utcnow()
-    mins_into = (now.hour - cron_hour) * 60 + now.minute
-    in_window = 0 <= mins_into < window
+    # Railway starts this container on EVERY deploy/restart AND on the cron. We
+    # only run the daily pipeline when it's a cron run, identified by the env var
+    # RAILWAY_CRON_RUN=true (set in the pipeline service's Variables). Any other
+    # start (a git-push deploy/restart) exits 0 without running — saving API $.
+    #   • --force flag         → run regardless (manual test)
+    #   • an explicit date arg → run regardless (e.g. `python3 launch.py 2026-06-05`)
+    is_cron   = os.environ.get("RAILWAY_CRON_RUN", "false").lower() == "true"
+    date_args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    force     = "--force" in sys.argv or bool(date_args)
 
-    if not (force or has_arg or in_window):
-        print(f"Deploy/restart at UTC {now:%H:%M} — not the cron window "
-              f"({cron_hour:02d}:00 +{window}m). Exiting 0 WITHOUT running the pipeline. "
-              f"(set FORCE_RUN=true to force a manual run)", flush=True)
+    if not (is_cron or force):
+        print("Not a cron run (RAILWAY_CRON_RUN != true) — this is a deploy/restart. "
+              "Exiting 0 WITHOUT running the pipeline. "
+              "(pass --force or a date arg to run manually)", flush=True)
         sys.exit(0)
 
-    print(f"Cron window (UTC {now:%H:%M}, force={force}, arg={has_arg}) — "
-          f"Starting Daily CA Pipeline...", flush=True)
-    result = subprocess.run(["bash", "./pipelines/run_daily.sh"] + sys.argv[1:])
+    print(f"Pipeline run (RAILWAY_CRON_RUN={is_cron}, force={force}) — "
+          f"Starting Daily CA...", flush=True)
+    result = subprocess.run(["bash", "./pipelines/run_daily.sh"] + date_args)
     sys.exit(result.returncode)

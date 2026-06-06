@@ -279,7 +279,7 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
         # Static connect: just the chapter name (Claude now returns short form)
         static_val = (it.get("static_connect") or "").split("—")[0].split(":")[0].strip()
 
-        rpsc_html = (f'<div class="rpsc-angle">{L["rpsc_angle"]}: {esc(it.get("rpsc_angle"))}</div>'
+        rpsc_html = (f'<div class="rpsc-angle">{L["rpsc_angle"]}: {md_bold(it.get("rpsc_angle"))}</div>'
                      if it.get("rpsc_angle") else "")
         static_html = (f'<div class="static">{L["static"]}: <b>{esc(static_val)}</b></div>'
                        if static_val else "")
@@ -288,8 +288,8 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
         <div class="item" style="border-left-color:{color};">
           <div class="cat" style="color:{color};">{esc(it.get('category'))}</div>
           <div class="title">{esc(it.get('title')).replace('**','')}</div>
-          <div class="summary">{esc(it.get('summary'))}</div>
-          <div class="context">{esc(it.get('context'))}</div>
+          <div class="summary">{md_bold(it.get('summary'))}</div>
+          <div class="context">{md_bold(it.get('context'))}</div>
           <ul>{bullets}</ul>
           {rpsc_html}
           {static_html}
@@ -299,7 +299,7 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
     also_html = ""
     if also_items:
         lis = "".join(
-            f"<li><span class='t'>{esc(a.get('title')).replace('**','')}</span> — {esc(a.get('one_liner'))}</li>"
+            f"<li><span class='t'>{esc(a.get('title')).replace('**','')}</span> — {md_bold(a.get('one_liner'))}</li>"
             for a in also_items)
         also_html = f"<div class='also'><h2>{L['also']}</h2><ul>{lis}</ul></div>"
 

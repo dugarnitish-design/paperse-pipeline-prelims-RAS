@@ -44,6 +44,19 @@ SPORT_WORDS = ("cricket", "test match", " odi ", " t20", "tennis", "french open"
                "la liga", "premier league", "badminton", "grandmaster",
                "midfielder", "striker", "quarterfinal", "semifinal", "world cup",
                "ashes", "ronaldo", "messi", "sabalenka", "carlsen")
+# Defeat/loss markers — a sports story about a LOSS carries no positive CA value
+# (e.g. "PV Sindhu suffers 10th consecutive loss"). Sports must show a positive
+# India achievement to qualify; any of these phrases forces a reject.
+LOSS_PHRASES = (
+    # explicit defeat phrasings
+    "consecutive loss", "consecutive defeat", "losing streak", "suffers defeat",
+    "suffers loss", "knocked out", "eliminated from", "crashes out", "bows out",
+    "ousted from", "goes down to", "loses to", "lost to", "beaten by", "defeated by",
+    # "Nth loss/defeat to <opponent>" — PIB/IE phrasings like "10th loss to An Se-young"
+    "th loss to", "th defeat to", "th straight loss", "loss to an se",
+    # "Nth straight match/loss/defeat/set" — e.g. "Loses 10th Straight Match"
+    "straight match", "straight loss", "straight defeat", "straight set",
+)
 # Incident markers — dropped UNLESS a policy/legal angle is also present.
 INCIDENT_WORDS = ("killed in", "airport attack", "terror attack", "terrorist attack",
                   "stabbed", "shooting", "gangrape", "gang-rape", "murder",
@@ -85,6 +98,13 @@ def _rule_foreign_sport(low, toks):
     if _has(low, *INDIA_TOKENS) or _has(low, *MERIT_TOKENS):
         return False
     return True
+
+
+def _rule_sports_loss(low, toks):
+    # A sports story framed around a defeat/loss/elimination — no positive India
+    # achievement angle, so no CA value. (e.g. "PV Sindhu suffers 10th consecutive
+    # loss to An Se Young"). Fires regardless of India angle: a loss is a loss.
+    return _has(low, *LOSS_PHRASES)
 
 
 def _rule_cricket_tour(low, toks):
@@ -133,6 +153,7 @@ RULES = [
     ("ie-page-header",       _rule_ie_header),
     ("address/pincode",      _rule_pincode),
     ("foreign-sport-no-india", _rule_foreign_sport),
+    ("sports-loss",          _rule_sports_loss),
     ("cricket-tour-announcement", _rule_cricket_tour),
     ("incident-no-policy",   _rule_incident),
     ("corporate-m&a",        _rule_corporate),

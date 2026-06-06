@@ -1251,9 +1251,12 @@ def main(news_date, label_date, dry_run=False):
     approved = rag.enrich_ca_items(approved, ca_category_map=ca_map)
     approved.sort(key=lambda x: x.get("final_priority_score", x.get("priority", 0.5)), reverse=True)
 
-    # 3. RANK + SELECT  (dedup by category for variety in the main 5)
+    # 3. RANK + SELECT
     # Use final_priority_score from RAG enrichment (incorporates topic_kb + PYQ boosts)
     approved.sort(key=lambda x: x.get("final_priority_score", x["priority"]), reverse=True)
+
+    # 3a. MAIN — prefer one item per category for variety, then ALWAYS backfill to
+    #     5 from the remaining high-scorers (FIX 4: never cap below 5 when ≥5 exist).
     main_items, seen_cat = [], set()
     for it in approved:
         if it["category"] in seen_cat:
@@ -1261,9 +1264,51 @@ def main(news_date, label_date, dry_run=False):
         seen_cat.add(it["category"]); main_items.append(it)
         if len(main_items) == 5:
             break
+    if len(main_items) < 5:
+        have = {id(x) for x in main_items}
+        for it in approved:                       # backfill ignoring category
+            if id(it) in have:
+                continue
+            main_items.append(it); have.add(id(it))
+            if len(main_items) == 5:
+                break
+
     chosen_ids = {id(x) for x in main_items}
     rest = [x for x in approved if id(x) not in chosen_ids]
-    also_items = rest[:5]   # ranks 6-10
+
+    # 3b. ALSO-IN-NEWS de-dup (FIX 2). Two complementary checks:
+    #   (a) Jaccard >= 0.5 with anything already shown (close rewrites).
+    #   (b) shares a DISTINCTIVE entity token with a MAIN story — catches PIB
+    #       reposts of the same event under very different headlines (e.g. main
+    #       "World Yogasana Championship" vs "English rendering of PM's remarks
+    #       during Yogasana World Championship"), whose Jaccard is only ~0.2.
+    #       Distinctive = a content token >= 6 chars that is NOT a generic
+    #       news word, so distinct stories ("National Panchayat Awards" vs
+    #       "National e-Governance Awards") are NOT wrongly merged.
+    GENERIC = {"national", "international", "awards", "award", "world", "india",
+               "indian", "championship", "minister", "government", "council",
+               "report", "scheme", "summit", "meeting", "first", "second",
+               "rajasthan", "central", "general", "annual", "ceremony", "winners"}
+    def _entities(t):
+        return {w for w in tokenize(t) if len(w) >= 6 and w not in GENERIC}
+    main_sigs = [tokenize(it.get("title") or "") for it in main_items]
+    main_ents = [_entities(it.get("title") or "") for it in main_items]
+
+    also_items, seen_sigs = [], list(main_sigs)
+    for it in rest:
+        toks = tokenize(it.get("title") or "")
+        # (a) close rewrite of something already shown
+        if any(toks and ks and len(toks & ks) / len(toks | ks) >= 0.5 for ks in seen_sigs):
+            continue
+        # (b) re-report of a MAIN story (shares a distinctive entity with a main)
+        ents = _entities(it.get("title") or "")
+        if ents and any(ents & me for me in main_ents):
+            continue
+        seen_sigs.append(toks)
+        also_items.append(it)
+        if len(also_items) == 5:
+            break
+
     for it in main_items: it["is_main"] = True
     for it in also_items: it["is_main"] = False
     C.log(f"   → MAIN (is_main=true): {len(main_items)} | ALSO IN NEWS: {len(also_items)}")
