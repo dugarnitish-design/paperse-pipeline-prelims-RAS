@@ -24,6 +24,15 @@ RUN pip install -r requirements.txt
 # (PIB scraper needs a real Chromium; Akamai blocks plain-requests/headless.)
 RUN python -m playwright install --with-deps chromium
 
+# Pre-download the sentence-transformer model (458 MB) at build time so it is
+# baked into the image. Without this every cron run downloads it from HuggingFace
+# at runtime — that is 458 MB over Railway's network on every daily cron, takes
+# several minutes, and can fail silently, killing the pipeline mid-STEP-2.
+RUN python3 -c "\
+from sentence_transformers import SentenceTransformer; \
+SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2'); \
+print('sentence-transformer model cached in image')"
+
 # App code
 COPY . .
 

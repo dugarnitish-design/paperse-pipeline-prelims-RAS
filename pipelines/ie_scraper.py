@@ -475,4 +475,8 @@ if __name__ == "__main__":
     # Print JSON so the step can be inspected / piped if desired.
     print(json.dumps(arts, ensure_ascii=False, indent=2))
     print(f"\n# {len(arts)} IE articles for {news_date.isoformat()}", file=sys.stderr)
-    sys.exit(0 if arts else 1)
+    if not arts:
+        print("⚠ ie_scraper: 0 articles fetched — STEP 2 will fall back to PIB-only", file=sys.stderr)
+    # Always exit 0: STEP 0 is best-effort. A non-zero exit aborts the whole
+    # pipeline via set -e. STEP 2 (daily_ca_pipeline) reads the cache directly.
+    sys.exit(0)
