@@ -1017,10 +1017,13 @@ def classify_item_type(item):
     Clear award/appointment/rank/sports items go to 'also'; everything else (including
     policy/scheme/bill and the ambiguous) defaults to 'main'. A MAIN signal wins (a
     scheme launched around an award is still MAIN)."""
-    blob = ((item.get("title") or "") + " " + (item.get("text") or "")).lower()
+    # Match signals against the HEADLINE (which states the content type), not the
+    # full body — matching the body over-triggers MAIN (almost any article mentions
+    # a project/scheme/operation word somewhere), collapsing the main/also split.
+    title = (item.get("title") or "").lower()
     cat = (item.get("category") or "").lower()
-    main_hit = any(s in blob for s in _MAIN_SIGNALS)
-    also_hit = (any(s in blob for s in _ALSO_SIGNALS)
+    main_hit = any(s in title for s in _MAIN_SIGNALS)
+    also_hit = (any(s in title for s in _ALSO_SIGNALS)
                 or any(k in cat for k in ("sports & awards", "books, awards", "personalit", "appointment")))
     return "also" if (also_hit and not main_hit) else "main"
 
