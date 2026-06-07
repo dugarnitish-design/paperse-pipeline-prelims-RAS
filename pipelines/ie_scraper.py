@@ -397,6 +397,48 @@ def _headline_matches(title, keywords):
     return any(k in low for k in keywords)
 
 
+# FIX 2 — editorial landing pages scraped IN ADDITION to the dated sitemap: the
+# homepage front-page (top stories) and the Science & Technology desk. Same
+# SECTION_POLICY / SKIP / science rules apply; the strict published-date filter at
+# body-fetch keeps only target-date stories. (IE has no clean 'environment' section
+# URL — environment/wildlife is covered via india + explained env-keywords + sitemap.)
+LANDING_PAGES = (
+    f"{BASE}/",                                # homepage / front page — top stories
+    f"{BASE}/section/technology/science/",     # Science & Technology desk
+)
+
+
+def _landing_candidates(sess):
+    """Scrape the editorial landing pages for /article/<section>/ links that pass the
+    section policy. Returns [(url, section)]; the caller dedups against the sitemap."""
+    out, seen = [], set()
+    for page in LANDING_PAGES:
+        try:
+            r = sess.get(page, timeout=30)
+            if r.status_code != 200:
+                C.log(f"   ⚠ IE landing {page} → HTTP {r.status_code}")
+                continue
+        except Exception as e:
+            C.log(f"   ⚠ IE landing fetch failed {page}: {e}")
+            continue
+        for href in re.findall(r"https://indianexpress\.com/article/[^\s\"'<>]+", r.text):
+            href = html.unescape(href)
+            if any(bit in href for bit in SKIP_URL_BITS):
+                continue
+            m = re.search(r"/article/([^/]+)/", href)
+            if not m or m.group(1) not in SECTION_POLICY:
+                continue
+            section = m.group(1)
+            if section == "technology" and "/science/" not in href.lower():
+                continue
+            if href in seen:
+                continue
+            seen.add(href)
+            out.append((href, section))
+    C.log(f"      landing-page candidates: {len(out)}")
+    return out
+
+
 def _cache_path(news_date):
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     return CACHE_DIR / f"{news_date.isoformat()}.json"
@@ -432,8 +474,8 @@ def fetch_ie_articles(news_date, force=False):
     C.log(f"   IE web scrape — articles published {news_date.isoformat()}")
     sess = _ensure_session()
 
-    candidates = _sitemap_candidates(sess, news_date)
-    C.log(f"   IE: {len(candidates)} candidate URLs from sitemap; fetching bodies…")
+    candidates = _sitemap_candidates(sess, news_date) + _landing_candidates(sess)
+    C.log(f"   IE: {len(candidates)} candidate URLs (sitemap + landing pages); fetching bodies…")
 
     out = []
     seen_urls = set()
