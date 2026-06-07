@@ -994,6 +994,8 @@ _ALSO_SIGNALS = (
     "record", "fastest", "youngest", "oldest", "longest", "tallest",
     "champion", " title", "trophy", " cup", "gold medal",
     "elected", "re-elected", "poll result", "election result", "by-election",
+    # win / honour / appointment synonyms (one-line facts):
+    "triumph", "clinch", "bag", "secure", "claim", "named", "inducted",
 )
 _MAIN_SIGNALS = (
     "scheme", "yojana", "mission", "policy", "launch", "rolled out", "amend",
@@ -1311,6 +1313,19 @@ def main(news_date, label_date, dry_run=False):
             it["category"] = canon
             _recat += 1
     C.log(f"   → display-category corrected from TOPIC_MATCH for {_recat} item(s)")
+
+    # FIX 3 (follow-up) — guarantee every passing item has a category. If the keyword
+    # scorer left it None (and the TOPIC_MATCH didn't map to a canonical category
+    # above), fall back to the raw Layer-3 TOPIC_MATCH; if that is also "none", use
+    # "General". Prevents uncategorised items showing a blank/None category chip.
+    _fallback = 0
+    for it in approved:
+        if not it.get("category"):
+            tm = (it.get("rpsc_topic") or "").strip()
+            it["category"] = tm if (tm and tm.lower() != "none") else "General"
+            _fallback += 1
+    if _fallback:
+        C.log(f"   → category fallback (TOPIC_MATCH/General) applied to {_fallback} item(s)")
 
     # ── LAYER 4 — RAG ENRICHMENT (unchanged) ─────────────────────────────────
     C.log("\n[4] RAG ENRICHMENT (ChromaDB PYQs + topic_kb priorities)")
