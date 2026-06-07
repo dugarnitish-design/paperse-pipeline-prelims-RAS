@@ -157,6 +157,23 @@
         .toast.error   { background: #dc2626; }
         .toast.info     { background: #2563eb; }
 
+        /* ── Replacement flow (CHANGE 2/3/4) ── */
+        .count-status { font-weight: 700; color: #166534; }
+        .count-status.warn { color: #b45309; }
+        .reverify-banner {
+            display: none; margin: 0 0 16px; padding: 12px 16px; border-radius: 8px;
+            background: #fef9c3; border: 1.5px solid #facc15; color: #854d0e;
+            font-size: 14px; font-weight: 700;
+        }
+        .reverify-banner.show { display: block; }
+        .btn-verify { background: #16a34a; color: white; }
+        .btn-verify:hover:not(:disabled) { background: #15803d; }
+        .item.from-bench .promoted-flag { background: #16a34a; color: white; }
+        .rejected-section { display: none; margin-top: 24px; }
+        .rejected-section.show { display: block; }
+        .rejected-section .section-title { color: #b91c1c; }
+        #rejectedList .item { opacity: 0.7; border-color: #fca5a5; background: #fff5f5; }
+
         @media (max-width: 600px) {
             .content { padding: 20px; }
             .action-bar { flex-direction: column; }
@@ -177,10 +194,10 @@
         {% if error %}<div class="error">{{ error }}</div>{% endif %}
 
         <div class="selection-bar" id="selBar">
-            <span class="sel-ok">✅ Publishing <strong id="selCount">{{ main_items | length }}</strong> items</span>
-            <span class="sel-warn">⚠️ <strong id="selCountWarn">0</strong>/3 — Select at least 3 items to publish</span>
-            <span style="margin-left:auto; opacity:.8">Uncheck a Top-5 item to reject · check an Also-in-News item to promote it</span>
+            <span class="count-status" id="countStatus">5/5 verified</span>
+            <span style="margin-left:auto; opacity:.8">Reject a Top-5 item → a bench item auto-fills the slot · re-verify before publishing</span>
         </div>
+        <div class="reverify-banner" id="reverifyBanner">⚠️ Items changed — please re-verify before publishing.</div>
 
         <form id="curatorForm">
             <!-- ── TOP 5 (main) ── -->
@@ -253,7 +270,7 @@
                     Also-in-News
                     <span class="count also" id="alsoCount">{{ also_items | length }}</span>
                 </div>
-                <div class="section-hint">☑ Check any item to <strong>promote it into the Top 5</strong> (fills a slot opened by an unchecked main item).</div>
+                <div class="section-hint">Bench (up to 15). Reject a Top-5 item and the highest-scoring bench item from a new category <strong>auto-fills the slot</strong>. You can also ☑ check one manually.</div>
                 <div id="alsoList">
                     {% for item in also_items %}
                     {% set iid = item.id %}
@@ -297,8 +314,16 @@
                 </div>
             </div>
 
+            <!-- ── REJECTED (CHANGE 2) ── -->
+            <div class="section rejected-section" id="rejectedSection">
+                <div class="section-title">Rejected</div>
+                <div class="section-hint">Rejected by curator — RAG has already learned; these are not published.</div>
+                <div id="rejectedList"></div>
+            </div>
+
             <div class="action-bar">
                 <button type="button" class="btn btn-approve" id="btnApprove">✅ Approve Top 5 As-Is</button>
+                <button type="button" class="btn btn-verify" id="btnVerify" disabled>✔ Verified — ready to publish</button>
                 <button type="button" class="btn btn-publish" id="btnPublish">🚀 Publish with Selection</button>
             </div>
         </form>
@@ -317,19 +342,105 @@ const learned = new Set();   // item ids whose rejection has been sent to RAG
 function allChecks() { return Array.from(document.querySelectorAll('.item-checkbox')); }
 function selectedCount() { return allChecks().filter(c => c.checked).length; }
 
+// ── Replacement flow (CHANGE 2/3/4) ───────────────────────────────────────
+let verified = true;                                  // CHANGE 3 — publish gate
+const btnVerify = document.getElementById('btnVerify');
+const rejectedList = document.getElementById('rejectedList');
+
+// items currently in the Top-5 box and checked (kept mains + promoted bench)
+function currentTopItems() {
+    return Array.from(document.querySelectorAll('#mainList .item-checkbox:checked'));
+}
+function topCount() { return currentTopItems().length; }
+
+// promote a specific bench checkbox into the Top-5 (green border + bench label)
+function promoteBench(cb, fromAuto) {
+    const item = cb.closest('.item');
+    cb.checked = true;
+    item.classList.add('is-promoted');
+    if (fromAuto) item.classList.add('from-bench');
+    const lbl = item.querySelector('.promoted-flag');
+    if (lbl) lbl.textContent = fromAuto ? '▲ Promoted from bench — verify before publish'
+                                        : '▲ Promoted to Top 5';
+    mainList.appendChild(item);
+}
+
+// CHANGE 2/4 — auto-fill an opened slot: highest-scoring bench item from a category
+// NOT already in the Top-5 (bench is rendered priority-desc, so first match = highest);
+// fall back to the highest scorer of any category. Returns false if bench is empty.
+function autoPromote() {
+    const topCats = new Set(currentTopItems().map(c => c.dataset.category).filter(Boolean));
+    const bench = Array.from(document.querySelectorAll('#alsoList .also-check:not(:checked)'));
+    if (!bench.length) return false;                  // bench exhausted
+    let pick = bench.find(c => c.dataset.category && !topCats.has(c.dataset.category));
+    if (!pick) pick = bench[0];                        // all bench cats already present
+    promoteBench(pick, true);
+    return true;
+}
+
+// CHANGE 3 — re-arm the verify gate on every reject / promotion
+function armVerify() {
+    verified = false;
+    document.getElementById('reverifyBanner').classList.add('show');
+}
+
+// CHANGE 2 — move a rejected main into the Rejected section, then auto-fill from bench
+function commitRejection(id) {
+    const cb = document.querySelector(`.main-check[data-id="${id}"]`);
+    if (!cb || cb.dataset.committed) return;          // guard double-commit
+    cb.dataset.committed = "1";
+    const item = cb.closest('.item');
+    cb.checked = false;
+    item.classList.remove('is-checked'); item.classList.add('is-rejected');
+    const box = document.getElementById(`reject-box-${id}`); if (box) box.classList.remove('visible');
+    rejectedList.appendChild(item);
+    document.getElementById('rejectedSection').classList.add('show');
+    autoPromote();
+    armVerify();
+    updateCount();
+}
+
+if (btnVerify) btnVerify.addEventListener('click', () => {
+    verified = true;
+    document.getElementById('reverifyBanner').classList.remove('show');
+    updateCount();
+    showToast('✔ Verified — you can publish now', 'success');
+});
+
 // ── Selection bar + publish-gate ──────────────────────────────────────────
 function updateCount() {
-    const n = selectedCount();
-    document.getElementById('selCount').textContent = n;
-    document.getElementById('selCountWarn').textContent = n;
-    document.getElementById('mainCount').textContent = mainList.querySelectorAll('.main-check').length;
-    // Also-in-News badge = bench items NOT yet promoted (decrements on each promote)
-    document.getElementById('alsoCount').textContent =
-        document.querySelectorAll('.also-check:not(:checked)').length;
-    const ok = n >= MIN_PUBLISH;
-    selBar.classList.toggle('warn', !ok);
-    btnPublish.disabled = !ok;
-    btnPublish.title = ok ? '' : `Select at least ${MIN_PUBLISH} items`;
+    const n = topCount();
+    const benchLeft = document.querySelectorAll('#alsoList .also-check:not(:checked)').length;
+    const topCats = new Set(currentTopItems().map(c => c.dataset.category).filter(Boolean));
+    const rejCats = Array.from(rejectedList.querySelectorAll('.item-checkbox'))
+                         .map(c => c.dataset.category).filter(Boolean);
+    const missing = [...new Set(rejCats.filter(c => !topCats.has(c)))];
+
+    // CHANGE 4 — clear count + missing-category readout
+    let status, warn = false;
+    if (n >= 5) {
+        status = verified ? '✅ 5/5 verified' : '5/5 — verify before publishing';
+    } else if (benchLeft === 0) {                      // target 5 unreachable
+        warn = true;
+        status = `⚠️ ${n}/5 — bench exhausted`
+               + (missing.length ? ` · missing: ${missing.join(', ')}` : '')
+               + (n < MIN_PUBLISH ? ` (need ${MIN_PUBLISH})` : '');
+    } else {
+        status = `${n}/5 — ${verified ? 'verified' : 'verify before publishing'}`;
+    }
+    const cs = document.getElementById('countStatus');
+    cs.textContent = status;
+    cs.classList.toggle('warn', warn || n < MIN_PUBLISH || !verified);
+    document.getElementById('mainCount').textContent = n;
+    document.getElementById('alsoCount').textContent = benchLeft;
+
+    // CHANGE 3/4 — publish only when min-3 met AND curator has re-verified
+    const canPublish = n >= MIN_PUBLISH && verified;
+    btnPublish.disabled = !canPublish;
+    btnPublish.title = n < MIN_PUBLISH ? `Need at least ${MIN_PUBLISH} items`
+                     : (!verified ? 'Click "Verified — ready to publish" first' : '');
+    btnVerify.disabled = verified;                     // active only when changes pending
+    selBar.classList.toggle('warn', n < MIN_PUBLISH);
 }
 
 // ── Main item uncheck → reject box (reason REQUIRED) ─────────────────────
@@ -356,12 +467,12 @@ document.querySelectorAll('.also-check').forEach(c => {
     c.addEventListener('change', () => {
         const item = c.closest('.item');
         if (c.checked) {
-            item.classList.add('is-promoted');
-            mainList.appendChild(item);      // physically moves it into the Top-5 section
+            promoteBench(c, false);          // manual promote (no bench label)
         } else {
-            item.classList.remove('is-promoted');
+            item.classList.remove('is-promoted', 'from-bench');
             document.getElementById('alsoList').appendChild(item);  // moves back down
         }
+        armVerify();                          // CHANGE 3 — any change → re-verify
         updateCount();
     });
 });
@@ -410,6 +521,8 @@ async function sendRejection(id, reason) {
             document.getElementById(`reason-learned-${id}`).classList.add('show');
             const cat = d.learning?.category_update?.category || cb?.dataset.category || 'category';
             showToast(`✓ RAG learned — "${cat}" weight lowered`, 'success');
+            // CHANGE 2 — commit the rejection: move to Rejected section + auto-fill from bench
+            commitRejection(id);
         } else {
             showToast('⚠ Could not save rejection: ' + (d.error || 'unknown'), 'error');
         }
@@ -496,6 +609,10 @@ btnPublish.addEventListener('click', async () => {
     if (n < MIN_PUBLISH) {
         console.warn('[publish] BLOCKED client-side: below MIN_PUBLISH');
         showToast(`Select at least ${MIN_PUBLISH} items`, 'error'); return;
+    }
+    if (!verified) {            // CHANGE 3 — must re-verify after any change
+        console.warn('[publish] BLOCKED client-side: not verified');
+        showToast('Click "✔ Verified — ready to publish" first', 'error'); return;
     }
     const missing = missingReasons();
     if (missing.length) {

@@ -357,6 +357,9 @@ def build_pdf(date, lang, linked_pyqs=None):
     # 'pending' and still render in the draft PDF.
     main_items = [r for r in main_items if r.get("status") != "rejected"]
     also_items = [r for r in also_items if r.get("status") != "rejected"]
+    # The bench holds up to 15 also-in-news for curator replacement, but the PDF
+    # shows at most 5 (already ordered priority.desc) so the brief stays compact.
+    also_items = also_items[:5]
     if not main_items:
         C.log(f"   ⚠ no {lang} main items for {ds}; skipping {lang} PDF")
         return None

@@ -1386,7 +1386,7 @@ def main(news_date, label_date, dry_run=False):
             continue
         seen_sigs.append(toks)
         also_items.append(it)
-        if len(also_items) == 5:
+        if len(also_items) == 15:    # bench pool for curator replacement (PDF caps at 5)
             break
 
     for it in main_items: it["is_main"] = True;  it["item_type"] = "main"
