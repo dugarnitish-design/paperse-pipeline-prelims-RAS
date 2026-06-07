@@ -1149,98 +1149,88 @@ def score_item(item, cats):
 # ─────────────────────────────────────────────────────────────────────────────
 SYS_EN = """
 CRITICAL ACCURACY RULES:
-1. ONLY use facts explicitly stated
-   in the source article provided.
-   Never extrapolate, assume, or
-   add context from training data.
-2. For dates — only use dates
-   that appear in the source text.
+1. ONLY use facts explicitly stated in the source article provided.
+   Never extrapolate, assume, or add context from training data.
+2. For dates — only use dates that appear in the source text.
    Never guess or infer dates.
-3. If a fact is not in the source,
-   do not include it.
+3. If a fact is not in the source, do not include it.
    Write "details awaited" instead.
-4. Numbers, names, dates must be
-   copied exactly from source.
+4. Numbers, names, dates must be copied exactly from source.
    No paraphrasing of factual data.
 
-You are an RPSC RAS exam coach
-writing daily current affairs
-for serious aspirants.
+You are writing exam-focused current affairs for RPSC RAS Prelims aspirants.
 
-STYLE RULES — strictly follow:
-1. Every sentence must answer:
-   "What will RPSC test from this?"
-2. Lead with the most testable fact
-   (name, number, rank, date, place)
-3. Bold all key facts using **bold**
-   (names, numbers, dates, places,
-   scheme names, article numbers)
-4. Use short crisp sentences.
-   Max 2 lines per point.
-5. Structure every item as:
-   WHAT happened (1 line)
-   KEY FACTS (2-3 bullet points
-   with bold facts)
-   RPSC ANGLE (1 line — what
-   could be asked)
-6. Never write like a journalist.
-   Never use: "In a major development"
-   "Sources said" "It is pertinent"
-   "Going forward" "In this regard"
-7. Word limit: 80-100 words per item
+STRICT RULES — follow exactly:
+- Only include specific testable facts.
+- Facts must be: names, numbers, dates, places, policies, schemes, appointments, records.
+- No personal stories, family angles, or emotions.
+- No human-interest content.
+- No opinions or speculation.
+- No background that isn't directly testable.
+- Maximum 4 bullet points.
+- Each bullet = exactly one testable fact.
+- Summary line = what happened + one key fact only.
+- Bold every key fact using **double asterisks**
+  (names, numbers, dates, places, scheme names, article numbers).
+- Never write like a journalist. Never use: "In a major development",
+  "Sources said", "It is pertinent", "Going forward", "In this regard".
+
+NEVER include:
+- Family members unless they are the news subject.
+- Personal struggles or support stories.
+- Reactions or quotes from people.
+- History beyond what's directly testable.
+- Any fact that couldn't appear in an MCQ.
+
+RPSC ANGLE must state the specific fact RPSC would test about this news item.
 
 EXAMPLE OUTPUT:
-Venezuela's Acting President
-**Delcy Rodriguez** visited India
-on **June 3, 2026**.
-
-Key Facts:
-- 5-day working visit (June 3-7)
-- To meet **PM Modi**
-- MEA recognises her as
-  'Acting President'
-- Visit linked to **Big Cats
-  Alliance** summit
-
-RPSC Angle: India-Latin America
-relations, bilateral diplomacy,
-recognition of governments
+Summary: **West Bengal** became the **36th** State/UT to roll out **Ayushman Bharat PM-JAY**.
+Bullets:
+- Scheme: **Pradhan Mantri Jan Arogya Yojana (PM-JAY)**
+- Health cover of **₹5 lakh** per family per year
+- Implemented by the **National Health Authority (NHA)**
+RPSC Angle: PM-JAY's cover amount, its implementing agency, and the number of States/UTs onboard.
 """
 SYS_HI = """
 CRITICAL ACCURACY RULES:
-1. ONLY use facts explicitly stated
-   in the source article provided.
-   Never extrapolate, assume, or
-   add context from training data.
-2. For dates — only use dates
-   that appear in the source text.
+1. ONLY use facts explicitly stated in the source article provided.
+   Never extrapolate, assume, or add context from training data.
+2. For dates — only use dates that appear in the source text.
    Never guess or infer dates.
-3. If a fact is not in the source,
-   do not include it.
+3. If a fact is not in the source, do not include it.
    Write "details awaited" instead.
-4. Numbers, names, dates must be
-   copied exactly from source.
+4. Numbers, names, dates must be copied exactly from source.
    No paraphrasing of factual data.
 
-आप RPSC RAS परीक्षा के एक
-अनुभवी कोच हैं जो गंभीर
-अभ्यर्थियों के लिए दैनिक
-करेंट अफेयर्स लिख रहे हैं।
+आप RPSC RAS प्रीलिम्स अभ्यर्थियों के लिए
+परीक्षा-केंद्रित करेंट अफेयर्स लिख रहे हैं।
 
-शैली नियम:
-1. हर वाक्य का उत्तर हो:
-   "RPSC इससे क्या पूछेगा?"
-2. सबसे परीक्षा-योग्य तथ्य
-   पहले लिखें
-3. सभी महत्वपूर्ण तथ्य
-   **बोल्ड** करें
-4. संरचना:
-   क्या हुआ (1 पंक्ति)
-   मुख्य तथ्य (2-3 बुलेट)
-   RPSC कोण (1 पंक्ति)
-5. शब्द सीमा: 80-100 शब्द
-6. समाचार पत्र शैली नहीं
-   परीक्षा कोच शैली
+कठोर नियम — ठीक इसी प्रकार पालन करें:
+- केवल विशिष्ट, परीक्षा-योग्य तथ्य शामिल करें।
+- तथ्य ये हों: नाम, संख्या, तिथि, स्थान, नीतियाँ,
+  योजनाएँ, नियुक्तियाँ, रिकॉर्ड।
+- कोई व्यक्तिगत कहानी, परिवार-पक्ष या भावनाएँ नहीं।
+- कोई ह्यूमन-इंटरेस्ट सामग्री नहीं।
+- कोई राय या अटकल नहीं।
+- ऐसी कोई पृष्ठभूमि नहीं जो सीधे परीक्षा-योग्य न हो।
+- अधिकतम 4 बुलेट बिंदु।
+- प्रत्येक बुलेट = ठीक एक परीक्षा-योग्य तथ्य।
+- सारांश पंक्ति = क्या हुआ + केवल एक मुख्य तथ्य।
+- हर मुख्य तथ्य **डबल एस्टरिस्क** से बोल्ड करें
+  (नाम, संख्या, तिथि, स्थान, योजना-नाम, अनुच्छेद-संख्या)।
+
+कभी शामिल न करें:
+- परिवार के सदस्य (जब तक वे स्वयं समाचार-विषय न हों)।
+- व्यक्तिगत संघर्ष या सहयोग की कहानियाँ।
+- लोगों की प्रतिक्रियाएँ या उद्धरण।
+- सीधे परीक्षा-योग्य से अधिक इतिहास।
+- कोई भी तथ्य जो MCQ में न आ सके।
+
+RPSC कोण: यह बताए कि इस समाचार से RPSC कौन-सा
+विशिष्ट तथ्य पूछेगा।
+
+समाचार-पत्र शैली नहीं — परीक्षा-कोच शैली।
 """
 
 def gen_main(item, lang):
@@ -1252,13 +1242,16 @@ def gen_main(item, lang):
             f"Category: {item.get('category')}.{hint}{examh}\n\n"
             f"Write in {lang_word}. Return ONLY JSON:\n"
             '{"title": "max 10 words, no ** markers", '
-            '"summary": "1 line — what happened", '
-            '"context": "2-3 lines background", '
-            '"bullets": ["3-5 exam facts; wrap every key name/number/place in **double asterisks** '
-            'e.g. \\"**NFHS-6** found **101** indicators in **Rajasthan**\\""], '
+            '"summary": "1 line — what happened + one key testable fact only", '
+            '"context": "1-2 lines — ONLY directly testable background; else \\"details awaited\\"", '
+            '"bullets": ["MAXIMUM 4 bullets; each bullet = exactly ONE testable fact '
+            '(name/number/date/place/policy/scheme/appointment/record); '
+            'wrap every key name/number/place in **double asterisks** '
+            'e.g. \\"**NFHS-6** found **101** indicators in **Rajasthan**\\"; '
+            'NO personal/family/human-interest content, NO quotes, NO opinion"], '
             '"static_connect": "short chapter name only, max 4 words, e.g. \\"Indian River System\\" or '
             '\\"Constitutional Amendment\\" — no sentences", '
-            '"rpsc_angle": "1 line — what RPSC could ask from this (topics/question hooks)"}')
+            '"rpsc_angle": "1 line — the SPECIFIC fact RPSC would test about this item"}')
     data, _ = C.claude_json(sysmsg, user, max_tokens=1000)
     data["bullets"] = data.get("bullets") or []
     data["rpsc_angle"] = data.get("rpsc_angle") or ""
@@ -1269,9 +1262,14 @@ def gen_also(item):
     (EN+HI) + a single-line rpsc_angle ONLY. No summary/context/bullets (that full
     authoring is reserved for the top-5 main items via gen_main). Uses Haiku."""
     user = (f"Source ({item['source']}): {item['text']}\nCategory: {item.get('category')}.\n\n"
-            "Return ONLY JSON with a short title and a 1-2 line key-fact one-liner, in EN and HI "
+            "Write a SINGLE-LINE exam fact for this news — NO bullet points, NO background, "
+            "NO family or personal angles, NO quotes or emotions. "
+            "Format the one_liner as: [Who/What] + [did what] + [key number/name]. "
+            'Example: "**R Praggnanandhaa** won **Norway Chess 2026**, defeating '
+            '**Alireza Firouzja** in the final round." '
+            "Bold the key facts with **double asterisks**. Provide it in EN and HI "
             "(Hindi authored fresh, not translated), plus a single-line rpsc_angle "
-            "(what RPSC could ask):\n"
+            "(the SPECIFIC fact RPSC would test):\n"
             '{"en": {"title": "...", "one_liner": "..."}, "hi": {"title": "...", "one_liner": "..."}, '
             '"rpsc_angle": "1 line"}')
     # Fault-tolerant: Haiku occasionally emits malformed JSON — a single bad bench

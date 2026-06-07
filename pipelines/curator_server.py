@@ -252,7 +252,11 @@ def publish_with_edits(date):
     selected   = [by_id[i] for i in selected_ids if i in by_id]              # checked (main + promoted)
     promoted   = [it for it in also_items if str(it["id"]) in sel_set]       # also → published main
     rejected   = [it for it in main_items if str(it["id"]) not in sel_set]   # unchecked main → rejected
-    kept_also  = [it for it in also_items if str(it["id"]) not in sel_set]   # un-promoted also → also_in_news
+    # FIX 2: un-promoted bench → also_in_news, BUT never resurrect an already-rejected
+    # item. A previously-rejected story can sit in the is_main=false bucket on a re-publish;
+    # without this guard it would be flipped back to 'also_in_news' and reappear in the PDF.
+    kept_also  = [it for it in also_items if str(it["id"]) not in sel_set
+                  and (it.get("status") or "") != "rejected"]
 
     # 1. Publish set (selected mains + promoted also-in-news) → status=published, is_main=true.
     for it in selected:

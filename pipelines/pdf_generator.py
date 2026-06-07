@@ -88,9 +88,6 @@ li b, li strong {{ color:#000000; font-weight:700; }}
 .rpsc-angle {{ background:#F3E5F5; border-left:3px solid #7B1FA2; padding:5px 10px;
                font-size:12px; font-style:italic; color:#6A1B9A; margin:4px 0; border-radius:0 4px 4px 0; }}
 
-.static {{ font-size:12px; color:#6b7280; font-variant:small-caps; letter-spacing:0.03em; margin-top:3px; }}
-.static b {{ color:#374151; }}
-
 .tags {{ margin-top:4px; }}
 .badge {{ display:inline-block; font-size:8.5px; font-weight:700; padding:2px 7px;
           border-radius:3px; margin-right:5px; }}
@@ -112,8 +109,6 @@ li b, li strong {{ color:#000000; font-weight:700; }}
 .pyqsrc {{ font-size:8.3px; color:#6b7280; margin-top:2px; }}
 .pyqdiv {{ border:none; border-top:1px solid #e5e7eb; margin:5px 0; }}
 
-.connects {{ font-size:12px; color:#374151; background:#f8fafc; border:1px solid #e5e7eb;
-             border-radius:7px; padding:6px 10px; margin-top:8px; }}
 .cta {{ margin-top:8px; padding:7px 11px; background:#fff7ed; border:1px solid #fed7aa;
         border-radius:8px; font-size:12px; }}
 .cta a {{ color:#c2410c; font-weight:800; text-decoration:none; }}
@@ -288,13 +283,11 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
         # RAG tags (from item attributes set during enrichment, or live topic_kb lookup)
         tags_html = _build_tag_html(it)
 
-        # Static connect: just the chapter name (Claude now returns short form)
-        static_val = (it.get("static_connect") or "").split("—")[0].split(":")[0].strip()
-
+        # FIX 3: static-connect display removed — it is internal pipeline metadata,
+        # not exam content. The item shows category, title, summary, context, bullets,
+        # RPSC angle and RAG tags only.
         rpsc_html = (f'<div class="rpsc-angle">{L["rpsc_angle"]}: {md_bold(it.get("rpsc_angle"))}</div>'
                      if it.get("rpsc_angle") else "")
-        static_html = (f'<div class="static">{L["static"]}: <b>{esc(static_val)}</b></div>'
-                       if static_val else "")
 
         items_html.append(f"""
         <div class="item" style="border-left-color:{color};">
@@ -304,7 +297,6 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
           <div class="context">{md_bold(it.get('context'))}</div>
           <ul>{bullets}</ul>
           {rpsc_html}
-          {static_html}
           {tags_html}
         </div>""")
 
@@ -315,11 +307,7 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
             for a in also_items)
         also_html = f"<div class='also'><h2>{L['also']}</h2><ul>{lis}</ul></div>"
 
-    connects = [it.get("static_connect") for it in main_items if it.get("static_connect")]
-    connects_html = ""
-    if connects:
-        connects_html = (f"<div class='connects'><b>{L['connects']}:</b> "
-                         + " · ".join(esc(c) for c in connects) + "</div>")
+    # FIX 3: the "Static connects today" summary line is removed (internal metadata).
 
     pyq_html = render_pyq_section(linked_pyqs or [], lang, main_items, L)
 
@@ -334,7 +322,6 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
   {''.join(items_html) if items_html else f"<p>{L['none']}</p>"}
   {also_html}
   {pyq_html}
-  {connects_html}
   <div class="cta"><b>{L['test']}</b> &nbsp;
      <a href="{TEST_URL.format(date=ds)}">paperse.in/test/{ds}</a><br>
      {L['test_sub']}</div>
@@ -343,15 +330,15 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
 
 LABELS = {
     "EN": {"daily": "Daily CA", "sub": "RPSC RAS — exam-focused current affairs",
-           "static": "Static connect", "also": "Also in the News",
-           "connects": "Static connects today", "test": "Test yourself on today's CA",
+           "also": "Also in the News",
+           "test": "Test yourself on today's CA",
            "test_sub": "Timed test • 5-8 questions • 1 min per question",
            "follow": "Follow PaperSe", "none": "No items today.",
            "pyq_head": "&#9998; PYQ of the Day", "from": "From", "answer": "Answer",
            "rpsc_angle": "RPSC Angle"},
     "HI": {"daily": "डेली करेंट अफेयर्स", "sub": "RPSC RAS — परीक्षा-केंद्रित करेंट अफेयर्स",
-           "static": "स्टैटिक कनेक्ट", "also": "अन्य प्रमुख समाचार",
-           "connects": "आज के स्टैटिक कनेक्ट", "test": "आज के CA पर खुद को परखें",
+           "also": "अन्य प्रमुख समाचार",
+           "test": "आज के CA पर खुद को परखें",
            "test_sub": "टाइम्ड टेस्ट • 5-8 प्रश्न • प्रति प्रश्न 1 मिनट",
            "follow": "PaperSe को फॉलो करें", "none": "आज कोई आइटम नहीं।",
            "pyq_head": "&#9998; आज का PYQ", "from": "स्रोत", "answer": "उत्तर",
@@ -364,11 +351,15 @@ def build_pdf(date, lang, linked_pyqs=None):
         "date": f"eq.{ds}", "is_main": "eq.true", "language": f"eq.{lang}", "order": "priority.desc"})
     also_items = C.sb_select("daily_ca_items", params={
         "date": f"eq.{ds}", "is_main": "eq.false", "language": f"eq.{lang}", "order": "priority.desc"})
-    # FIX 6: rejected items are kept in the DB (is_main=false, status='rejected') for
-    # audit/RAG but must never appear in the PDF. Null-safe — pre-curation rows are
-    # 'pending' and still render in the draft PDF.
-    main_items = [r for r in main_items if r.get("status") != "rejected"]
-    also_items = [r for r in also_items if r.get("status") != "rejected"]
+    # FIX 2 / FIX 6: rejected items are kept in the DB (is_main=false, status='rejected')
+    # for audit/RAG but must NEVER appear in the PDF — not in main, not in also-in-news,
+    # nowhere. We exclude exactly status='rejected' (NOT 'pending'): pre-curation and
+    # auto-published briefs leave items at 'pending', and those must still render, so a
+    # strict status='published'/'also_in_news' allowlist would blank out every
+    # auto-published brief. Rejected is the only status that is ever hidden.
+    _REJECTED = "rejected"
+    main_items = [r for r in main_items if (r.get("status") or "") != _REJECTED]
+    also_items = [r for r in also_items if (r.get("status") or "") != _REJECTED]
     # The bench holds up to 15 also-in-news for curator replacement, but the PDF
     # shows at most 5 (already ordered priority.desc) so the brief stays compact.
     also_items = also_items[:5]
