@@ -67,14 +67,15 @@ else:
                  or bool(date_args))
 
     cron_hour = int(os.environ.get("CRON_HOUR_UTC", "1"))
+    cron_min  = int(os.environ.get("CRON_MIN_UTC", "0"))   # supports e.g. 18:30 UTC cron
     window    = int(os.environ.get("CRON_WINDOW_MIN", "20"))
     now       = datetime.datetime.now(datetime.timezone.utc)
-    mins_into = (now.hour - cron_hour) * 60 + now.minute
+    mins_into = (now.hour - cron_hour) * 60 + (now.minute - cron_min)
     in_window = 0 <= mins_into < window
 
     if not (force or in_window):
         print(f"Deploy/restart at UTC {now:%H:%M} — not the cron window "
-              f"({cron_hour:02d}:00 +{window}m). Exiting 0 WITHOUT running the pipeline. "
+              f"({cron_hour:02d}:{cron_min:02d} +{window}m). Exiting 0 WITHOUT running the pipeline. "
               f"(set FORCE_RUN=true or pass a date arg to run manually)", flush=True)
         sys.exit(0)
 

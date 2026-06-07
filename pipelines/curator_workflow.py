@@ -10,7 +10,7 @@ notification to the admin with [Approve & Publish] and [Edit & Approve] buttons.
 The pipeline exits immediately. Publishing happens either when:
   a) Admin clicks "Approve" → curator_server.py webhook handles it
   b) Admin edits on dashboard → curator_server.py /publish handles it
-  c) No response by 08:30 AM IST → curator_auto_publish.py, fired by the daily
+  c) No response by 6:00 AM IST → curator_auto_publish.py, fired by the daily
      scheduler thread in curator_server (_start_autopublish_scheduler)
 """
 import sys, json, datetime, pathlib
@@ -24,13 +24,13 @@ from pipelines.curator_telegram import send_approval_message
 
 def next_autopublish_utc(after=None):
     """
-    The next fixed daily auto-publish slot (default 08:30 IST = 03:00 UTC) as a UTC
+    The next fixed daily auto-publish slot (default 00:30 UTC = 6:00 AM IST) as a UTC
     datetime. Matches curator_server._start_autopublish_scheduler. Used only for the
     "auto-publishes at …" label shown to the curator (Telegram + dashboard).
     """
     after = after or datetime.datetime.utcnow()
-    hour = int(C.ENV.get("AUTOPUBLISH_HOUR_UTC", "3"))
-    minute = int(C.ENV.get("AUTOPUBLISH_MIN_UTC", "0"))
+    hour = int(C.ENV.get("AUTOPUBLISH_HOUR_UTC", "0"))     # 00:30 UTC = 6:00 AM IST
+    minute = int(C.ENV.get("AUTOPUBLISH_MIN_UTC", "30"))
     slot = after.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if slot <= after:
         slot += datetime.timedelta(days=1)
@@ -141,7 +141,7 @@ def main(date_str: str) -> None:
 
     C.log(f"  Found {len(items)} items (will send top 5 for approval, items 6-8 as candidates)")
 
-    # Auto-publish time = the fixed daily slot (08:30 IST = 03:00 UTC), single source
+    # Auto-publish time = the fixed daily slot (6:00 AM IST = 00:30 UTC), single source
     # of truth for the Telegram message + draft.timeout_at (display only — the curator
     # service scheduler is what actually fires the publish).
     send_time = datetime.datetime.utcnow()

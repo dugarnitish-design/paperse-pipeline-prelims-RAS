@@ -1221,12 +1221,16 @@ def gen_main(item, lang):
     return data
 
 def gen_also(item):
-    """Title + one-liner, EN and HI together."""
+    """Bench / also-in-news item — LIGHTWEIGHT (cost optimisation): title + one-liner
+    (EN+HI) + a single-line rpsc_angle ONLY. No summary/context/bullets (that full
+    authoring is reserved for the top-5 main items via gen_main). Uses Haiku."""
     user = (f"Source ({item['source']}): {item['text']}\nCategory: {item.get('category')}.\n\n"
             "Return ONLY JSON with a short title and a 1-2 line key-fact one-liner, in EN and HI "
-            "(Hindi authored fresh, not translated):\n"
-            '{"en": {"title": "...", "one_liner": "..."}, "hi": {"title": "...", "one_liner": "..."}}')
-    data, _ = C.claude_json(SYS_EN, user, max_tokens=500)
+            "(Hindi authored fresh, not translated), plus a single-line rpsc_angle "
+            "(what RPSC could ask):\n"
+            '{"en": {"title": "...", "one_liner": "..."}, "hi": {"title": "...", "one_liner": "..."}, '
+            '"rpsc_angle": "1 line"}')
+    data, _ = C.claude_json(SYS_EN, user, max_tokens=500, model=C.HAIKU_MODEL)
     return data
 
 
@@ -1467,8 +1471,10 @@ def main(news_date, label_date, dry_run=False):
                     priority=it["priority"], is_main=False, item_type="also",
                     static_connect=it.get("static_connect"))
         C.sb_insert("daily_ca_items", [
-            {**base, "language": "EN", "title": a["en"]["title"], "one_liner": a["en"]["one_liner"]},
-            {**base, "language": "HI", "title": a["hi"]["title"], "one_liner": a["hi"]["one_liner"]},
+            {**base, "language": "EN", "title": a["en"]["title"], "one_liner": a["en"]["one_liner"],
+             "rpsc_angle": a.get("rpsc_angle")},
+            {**base, "language": "HI", "title": a["hi"]["title"], "one_liner": a["hi"]["one_liner"],
+             "rpsc_angle": a.get("rpsc_angle")},
         ], returning=False)
 
     total = C.sb_count("daily_ca_items", {"date": f"eq.{label_date.isoformat()}"})

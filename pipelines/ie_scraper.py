@@ -444,6 +444,31 @@ def _cache_path(news_date):
     return CACHE_DIR / f"{news_date.isoformat()}.json"
 
 
+def write_supabase(news_date, articles):
+    """Producer side (Mac night-scraper): upsert scraped IE articles into Supabase
+    `ie_cache` (keyed by url) so the Railway pipeline reads them without scraping
+    from a cloud IP. Mirrors pib_scraper.write_supabase. Returns rows upserted."""
+    if isinstance(news_date, str):
+        news_date = C.parse_date(news_date)
+    rows = []
+    for a in articles:
+        if not a.get("url"):
+            continue
+        rows.append({
+            "url": a.get("url"), "title": a.get("title"), "section": a.get("section"),
+            "summary": a.get("summary"), "full_text": a.get("full_text"),
+            "text": a.get("text"), "published_date": news_date.isoformat(),
+        })
+    if rows:
+        try:
+            C.sb_upsert("ie_cache", rows, on_conflict="url")
+        except Exception as e:
+            C.log(f"   ⚠ IE Supabase upsert failed: {e}")
+            return 0
+    C.log(f"   IE → Supabase ie_cache: upserted {len(rows)} rows for {news_date.isoformat()}")
+    return len(rows)
+
+
 def fetch_ie_articles(news_date, force=False):
     """Fetch IE articles published on `news_date` via the date-addressable archive
     sitemap, applying the per-section policy in SECTION_POLICY. Returns a list of
@@ -460,6 +485,18 @@ def fetch_ie_articles(news_date, force=False):
     Pass force=True (or delete the cache file) to re-scrape."""
     if isinstance(news_date, str):
         news_date = C.parse_date(news_date)
+    iso = news_date.isoformat()
+    # 1 — Supabase ie_cache (PRIMARY; how Railway reads the Mac night-scrape, mirrors PIB)
+    if not force:
+        try:
+            rows = C.sb_select("ie_cache", params={"published_date": f"eq.{iso}", "select": "*"})
+            if rows:
+                C.log(f"   IE: {len(rows)} articles for {iso} (Supabase ie_cache)")
+                return [{"title": r.get("title"), "source": "IE", "section": r.get("section"),
+                         "summary": r.get("summary"), "full_text": r.get("full_text"),
+                         "url": r.get("url"), "text": r.get("text")} for r in rows]
+        except Exception as e:
+            C.log(f"   ⚠ ie_cache read failed (will try local/live): {e}")
     cache = _cache_path(news_date)
     if not force and cache.exists():
         try:
@@ -528,6 +565,10 @@ if __name__ == "__main__":
         pipeline_date = C.parse_date(arg) if arg else datetime.date.today()
         news_date = pipeline_date - datetime.timedelta(days=1)
         arts = fetch_ie_articles(news_date)
+    # --write-supabase: upsert the scraped articles into Supabase ie_cache (used by
+    # the Mac night-scraper so Railway can read them).
+    if "--write-supabase" in sys.argv and arts:
+        write_supabase(news_date, arts)
     # Print JSON so the step can be inspected / piped if desired.
     print(json.dumps(arts, ensure_ascii=False, indent=2))
     print(f"\n# {len(arts)} IE articles for {news_date.isoformat()}", file=sys.stderr)

@@ -55,7 +55,7 @@ def send_approval_message(date_str: str, items: list, auto_publish_at=None) -> d
         lines.append(f"{i}. {title}")
         lines.append(f"   📊 Score: <code>{score}</code> | 📰 {source}")
 
-    ap_label = C.ist_label(auto_publish_at) if auto_publish_at else "8:30 AM IST"
+    ap_label = C.ist_label(auto_publish_at) if auto_publish_at else "6:00 AM IST"
     lines += [
         "",
         "Items 6–8 available on dashboard for replacement.",
@@ -103,13 +103,13 @@ def send_simple_message(chat_id: str, text: str) -> None:
 
 
 def notify_auto_published(date_str: str) -> None:
-    """Notify admin that auto-publish fired (no response by the 8:30 AM IST deadline)."""
+    """Notify admin that auto-publish fired (no response by the 6:00 AM IST deadline)."""
     admin_chat = _admin_chat()
     if not admin_chat:
         return
     send_simple_message(
         admin_chat,
-        f"⏰ Auto-published {date_str} — no response by 8:30 AM IST.\n"
+        f"⏰ Auto-published {date_str} — no response by 6:00 AM IST.\n"
         f"Log: curator_feedback (auto_published=true)\n"
         f"Top 5 items published as-is."
     )

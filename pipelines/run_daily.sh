@@ -4,7 +4,9 @@
 # Stops immediately if any step fails.
 set -euo pipefail
 
-DATE="${1:-$(date +%F)}"
+# IST so the 18:30-UTC (00:00 IST) cron picks the correct calendar day. Plain UTC
+# `date` would still read "yesterday" at 18:30 UTC and shift news_date by one.
+DATE="${1:-$(TZ=Asia/Kolkata date +%F)}"
 cd "$(dirname "$0")/.."
 
 # Calculate yesterday's date based on the label date (not system date)

@@ -44,7 +44,7 @@ def gen_mcq(item, qtype, avoid=None):
             f"Make ONE {qtype} question. Return ONLY JSON:\n"
             '{"question":"...","options":{"a":"...","b":"...","c":"...","d":"..."},'
             '"correct":"a|b|c|d","explanation":"max 2 lines","difficulty":1}')
-    data, _ = C.claude_json(SYS, user, max_tokens=900)
+    data, _ = C.claude_json(SYS, user, max_tokens=900, model=C.HAIKU_MODEL)  # cost-opt: Haiku for MCQs
     return data
 
 def main(date):
