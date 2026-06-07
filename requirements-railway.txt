@@ -1,0 +1,19 @@
+# Slim deps for the Railway services (pipeline + curator).
+#
+# Railway is a 512 MB box. ALL embedding/ChromaDB work is precomputed on the Mac
+# night job (night_scraper.py → daily_scored_items + *_cache.pyq), so Railway never
+# imports torch / sentence-transformers / chromadb. Keeping them out of the image
+# is what permanently fixes the OOM (SIGKILL / exit 137) on the pipeline cron and
+# on the curator "Publish with Selection" PDF regen.
+#
+# pdfplumber is omitted too — it is only used by the monthly SUJAS parser, which
+# runs locally on the Mac, never in the Railway daily flow.
+#
+# The full set (with torch/chromadb/sentence-transformers/pdfplumber) lives in
+# requirements.txt and is what the Mac uses.
+requests>=2.31.0
+anthropic>=0.21.0
+weasyprint>=60.0
+beautifulsoup4>=4.12.0
+python-telegram-bot>=20.0
+flask>=3.0.0

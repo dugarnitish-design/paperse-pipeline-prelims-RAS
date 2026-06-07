@@ -224,6 +224,8 @@ def write_supabase(date, items):
             "text": it.get("text") or "",
             "url": it.get("url") or "",
             "published_date": date.isoformat(),
+            # PYQ candidates precomputed by the Mac night job (None for plain CLI runs).
+            "pyq": it.get("pyq"),
         })
     if rows:
         try:

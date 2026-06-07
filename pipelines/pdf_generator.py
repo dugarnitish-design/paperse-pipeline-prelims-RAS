@@ -148,12 +148,18 @@ def _build_tag_html(item):
         except Exception:
             pass
     # --- enrich PYQ tag if not already set ---
+    # Prefer item["pyq"] (precomputed on the Mac, stored on the daily_ca_items row)
+    # so the curator/Railway PDF regen never loads torch/chromadb. Falls back to a
+    # live lookup only when the column is absent (local Mac one-off).
     if "pyq_match_year" not in item:
-        text = f"{(item.get('title') or '').replace('**', '')} {item.get('summary') or ''}".strip()
-        if text:
-            m = C.pyq_lookup(text, n=1, max_distance=0.35)
-            if m:
-                item["pyq_match_year"] = m.get("year")
+        cands = item.get("pyq")
+        if cands is not None:
+            m = next((c for c in cands if c.get("distance", 1.0) <= 0.35), None)
+        else:
+            text = f"{(item.get('title') or '').replace('**', '')} {item.get('summary') or ''}".strip()
+            m = C.pyq_lookup(text, n=1, max_distance=0.35) if text else None
+        if m:
+            item["pyq_match_year"] = m.get("year")
     # --- build HTML (badge = bg colour, text colour) ---
     tags = []
     if item.get("pyq_match_year"):
@@ -199,7 +205,13 @@ def find_linked_pyqs(en_items, candidate_max_distance=0.70, candidate_n=3, per_a
         text = f"{title} {it.get('summary') or ''}".strip()
         if not text:
             continue
-        cands = C.pyq_lookup_many(text, n=candidate_n, max_distance=candidate_max_distance)
+        # Prefer precomputed candidates stored on the daily_ca_items row (Mac night
+        # job) — this is what keeps the curator "Publish with Selection" PDF regen
+        # from loading torch/chromadb and OOM-ing the 512 MB Railway service.
+        cands = it.get("pyq")
+        if cands is None:
+            cands = C.pyq_lookup_many(text, n=candidate_n, max_distance=candidate_max_distance)
+        cands = [c for c in (cands or []) if c.get("distance", 1.0) <= candidate_max_distance][:candidate_n]
         C.log(f"   PYQ search: {title[:70]}")
         if not cands:
             C.log(f"      → no vector candidates within {candidate_max_distance}")

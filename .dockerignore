@@ -1,0 +1,17 @@
+# Railway images are slim consumers — they never query ChromaDB (PYQ matches are
+# precomputed on the Mac night job), so the 12 MB vector store and its inputs are
+# excluded from the build context. Keeps images small and build context lean.
+chroma_db/
+inputs/
+outputs/
+logs/
+*.log
+
+# Local/dev cruft
+.git/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store

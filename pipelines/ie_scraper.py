@@ -458,6 +458,8 @@ def write_supabase(news_date, articles):
             "url": a.get("url"), "title": a.get("title"), "section": a.get("section"),
             "summary": a.get("summary"), "full_text": a.get("full_text"),
             "text": a.get("text"), "published_date": news_date.isoformat(),
+            # PYQ candidates precomputed by the Mac night job (None for plain CLI runs).
+            "pyq": a.get("pyq"),
         })
     if rows:
         try:
@@ -494,7 +496,9 @@ def fetch_ie_articles(news_date, force=False):
                 C.log(f"   IE: {len(rows)} articles for {iso} (Supabase ie_cache)")
                 return [{"title": r.get("title"), "source": "IE", "section": r.get("section"),
                          "summary": r.get("summary"), "full_text": r.get("full_text"),
-                         "url": r.get("url"), "text": r.get("text")} for r in rows]
+                         "url": r.get("url"), "text": r.get("text"),
+                         # PYQ candidates precomputed by the Mac night job.
+                         "pyq_candidates": r.get("pyq")} for r in rows]
         except Exception as e:
             C.log(f"   ⚠ ie_cache read failed (will try local/live): {e}")
     cache = _cache_path(news_date)

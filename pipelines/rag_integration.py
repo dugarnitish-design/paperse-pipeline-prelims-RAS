@@ -14,9 +14,12 @@ LAYER 3 — Supabase topic_kb
     - priority_score, frequency, trajectory, never_skipped
     - Boost priority based on topic intelligence
 """
-import chromadb
 from pathlib import Path
 import sys, datetime
+# NOTE: chromadb is imported lazily inside get_chroma_client() so this module can
+# be imported on the slim Railway image (which has NO torch/chromadb/sentence-
+# transformers). On Railway the heavy path never runs — items arrive with PYQ
+# matches already computed on the Mac (item["pyq_candidates"]).
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from pipelines import _common as C
@@ -29,9 +32,16 @@ from pipelines import _common as C
 CHROMA_PATH = Path(__file__).resolve().parent.parent / "chroma_db"
 
 def get_chroma_client():
-    """Initialize ChromaDB persistent client."""
+    """Initialize ChromaDB persistent client (Mac only — chromadb is imported
+    lazily here). Returns None if chromadb isn't installed (slim Railway image)
+    or the local collection is missing."""
     if not CHROMA_PATH.exists():
         C.log(f"⚠ ChromaDB path not found: {CHROMA_PATH}")
+        return None
+    try:
+        import chromadb
+    except ImportError:
+        C.log("⚠ chromadb not installed (slim image) — using precomputed PYQ only")
         return None
     return chromadb.PersistentClient(path=str(CHROMA_PATH))
 
@@ -40,61 +50,56 @@ def get_chroma_client():
 # LAYER 2: ChromaDB PYQ Matching
 # ─────────────────────────────────────────────────────────────────────────────
 
-def enrich_with_pyq_matches(item, client, similarity_threshold=0.65):
-    """
-    Query ChromaDB prelims_questions collection.
+def _best_candidate(item, client):
+    """Return the single best PYQ candidate dict (highest similarity, best-first)
+    for an item, or None.
 
-    Args:
-        item: dict with 'title', 'summary' fields
-        client: ChromaDB client
-        similarity_threshold: min cosine similarity (0-1)
-
-    Returns:
-        item dict updated with:
-          - pyq_match_year (if match found)
-          - pyq_match_topic (if match found)
-          - pyq_similarity_score (if match found)
-    """
+    Prefers item["pyq_candidates"] — the list precomputed on the Mac night job
+    (C.pyq_lookup_many output: each has score/distance/year/q_no/topic/subject).
+    Only if that key is ABSENT (never set) does it fall back to a live ChromaDB
+    query via `client` (Mac-only). On Railway pyq_candidates is always present
+    (it may be an empty list ⇒ no match), so ChromaDB is never touched."""
+    cands = item.get("pyq_candidates")
+    if cands is not None:
+        return cands[0] if cands else None
+    # Live fallback (Mac, when not precomputed) ───────────────────────────────
     if not client:
-        return item
-
+        return None
     try:
         col = client.get_collection(name="prelims_questions")
-    except Exception as e:
-        C.log(f"⚠ Could not access prelims_questions collection: {e}")
-        return item
-
-    # Build search text from item
-    search_text = f"{item.get('title', '')} {item.get('summary', '')}"
-    if not search_text.strip():
-        return item
-
-    # Query top 3 similar PYQs
-    try:
-        results = col.query(
-            query_texts=[search_text],
-            n_results=3,
-            include=["metadatas", "distances"]
-        )
+        search_text = f"{item.get('title', '')} {item.get('summary', '')}".strip()
+        if not search_text:
+            return None
+        res = col.query(query_texts=[search_text], n_results=3,
+                        include=["metadatas", "distances"])
+        if not res or not res.get("metadatas") or not res["metadatas"][0]:
+            return None
+        meta = res["metadatas"][0][0]
+        dist = res["distances"][0][0]
+        return {"score": round(1 - dist, 3), "distance": round(dist, 3),
+                "year": meta.get("year"), "topic": meta.get("topic"),
+                "subject": meta.get("subject"), "q_no": meta.get("q_no")}
     except Exception as e:
         C.log(f"⚠ ChromaDB query failed: {e}")
-        return item
+        return None
 
-    if not results or not results.get("metadatas") or not results["metadatas"][0]:
-        return item
 
-    # Check if best match exceeds threshold
-    # ChromaDB distance = 1 - cosine_similarity, so convert back
-    metadata = results["metadatas"][0][0]
-    distance = results["distances"][0][0]
-    similarity = 1 - distance
+def enrich_with_pyq_matches(item, client, similarity_threshold=0.65):
+    """Attach a PYQ-match boost from the best candidate (precomputed on the Mac,
+    or a live ChromaDB query as Mac-only fallback).
 
-    if similarity > similarity_threshold:
-        item["pyq_match_year"] = metadata.get("year")
-        item["pyq_match_topic"] = metadata.get("topic")
+    Returns item updated with pyq_match_year / pyq_match_topic /
+    pyq_similarity_score / pyq_boost.
+    """
+    best = _best_candidate(item, client)
+    similarity = best.get("score", 0) if best else 0
+
+    if best and similarity > similarity_threshold:
+        item["pyq_match_year"] = best.get("year")
+        item["pyq_match_topic"] = best.get("topic")
         item["pyq_similarity_score"] = round(similarity, 3)
         item["pyq_boost"] = 0.2  # Boost priority by 0.2
-        C.log(f"   🎯 PYQ match found: {metadata.get('year')} "
+        C.log(f"   🎯 PYQ match found: {best.get('year')} "
               f"({item['pyq_match_topic']}) - similarity: {item['pyq_similarity_score']}")
     else:
         item["pyq_boost"] = 0

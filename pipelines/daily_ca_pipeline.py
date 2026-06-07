@@ -593,7 +593,10 @@ def fetch_pib(date):
         rows = C.sb_select("pib_cache", params={"published_date": f"eq.{iso}", "select": "*"})
         if rows and len(rows) >= 15:
             items = [{"source": "PIB", "title": r.get("title"),
-                      "text": r.get("text"), "url": r.get("url")} for r in rows]
+                      "text": r.get("text"), "url": r.get("url"),
+                      # PYQ candidates precomputed by the Mac night job (None ⇒ not
+                      # precomputed → scorer falls back to a live lookup on the Mac).
+                      "pyq_candidates": r.get("pyq")} for r in rows]
             C.log(f"   PIB: {len(items)} releases for {iso} (Supabase pib_cache)")
             return items
     except Exception as e:
@@ -882,6 +885,23 @@ def _dedupe_same_batch(items, threshold=0.8):
     return kept
 
 
+def _pyq_best(item, text, max_distance):
+    """Best PYQ match for an item, precompute-aware.
+
+    Prefers item["pyq_candidates"] (computed once on the Mac night job and carried
+    on the cache row) so neither the scorer nor Railway needs to load torch/chroma.
+    Each candidate is a C.pyq_lookup_many dict (score/distance/year/q_no/topic/
+    subject), best-first. Falls back to a live C.pyq_lookup ONLY when the key is
+    absent (e.g. a local one-off run on the Mac before precompute)."""
+    cands = item.get("pyq_candidates")
+    if cands is not None:
+        for c in cands:                       # already best-first (lowest distance)
+            if c.get("distance", 1.0) <= max_distance:
+                return c
+        return None
+    return C.pyq_lookup(text, max_distance=max_distance)
+
+
 def run_filters(item, cats):
     """5-filter chain. Returns enriched item or None (rejected)."""
     # FILTER 0 — strict recency. Reject anything published before (today - 2 days).
@@ -973,7 +993,7 @@ def run_filters(item, cats):
     # FILTER 5 — ChromaDB PYQ check (only attach when genuinely similar)
     static_connect = best.get("static_topic_link") or best.get("category")
     exam_ref = None
-    pyq = C.pyq_lookup(text, max_distance=0.33)
+    pyq = _pyq_best(item, text, 0.33)
     if pyq:
         priority += 0.2
         exam_ref = f"{pyq['subject']} · asked {pyq['year']}"
@@ -1091,7 +1111,7 @@ def score_item(item, cats):
             priority += 0.3
         static_connect = best.get("static_topic_link") or best.get("category")
         exam_ref = None
-        pyq = C.pyq_lookup(text, max_distance=0.33)
+        pyq = _pyq_best(item, text, 0.33)
         if pyq:
             priority += 0.2
             exam_ref = f"{pyq['subject']} · asked {pyq['year']}"
@@ -1273,19 +1293,14 @@ def gen_also(item):
 # ─────────────────────────────────────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────────────────────────────────────
-def main(news_date, label_date, dry_run=False):
-    """
-    Main pipeline. Fetches news from news_date (yesterday), labels output with label_date (today).
-    news_date: used for PIB, Wikipedia fetching (date of the news)
-    label_date: used for output filenames, database records, PDF headers (today)
-    dry_run: if True, print ranked candidates and exit before content generation.
-    """
-    C.log("=" * 64)
-    C.log(f"PaperSe Daily CA Pipeline — news_date={news_date.isoformat()}  label_date={label_date.isoformat()}"
-          + ("  [DRY-RUN]" if dry_run else ""))
-    C.log(f"  weekday={label_date.strftime('%A')}")
-    C.log("=" * 64)
+def score_and_select(news_date, label_date):
+    """PRODUCER half — fetch + Layer 2 + dedup + keyword scoring + Layer 3 (Claude)
+    + RAG/ChromaDB enrichment + rank + MAIN/ALSO selection. This is the HEAVY half
+    (Claude + torch/chromadb), so it runs on the Mac night job (and on a local full
+    run). Returns {"main_items", "also_items", "approved"} or None.
 
+    Items carry pyq_candidates (from the cache rows) so neither this scorer nor the
+    downstream Railway consumer needs to load the embedding model."""
     # 1. FETCH  (SUJAS removed — monthly magazine only, not daily pipeline)
     C.log("\n[1] FETCH SOURCES")
     raw = []
@@ -1435,6 +1450,61 @@ def main(news_date, label_date, dry_run=False):
     for i, it in enumerate(main_items, 1):
         C.log(f"      {i}. [{it['priority']:.3f}] {it['category']} · {it['source']} :: {it['title'][:70]}")
 
+    return {"main_items": main_items, "also_items": also_items, "approved": approved}
+
+
+def _load_scored_items(label_date):
+    """CONSUMER — load the Mac night job's pre-scored candidates for label_date
+    from daily_scored_items. Returns the same shape as score_and_select() or None.
+    On Railway this is the ONLY scoring path (the slim image has no torch/chromadb)."""
+    try:
+        rows = C.sb_select("daily_scored_items",
+                           params={"date": f"eq.{label_date.isoformat()}", "limit": 1})
+    except Exception as e:
+        C.log(f"   ⚠ daily_scored_items read failed: {e}")
+        return None
+    if not rows:
+        return None
+    payload = rows[0].get("payload") or {}
+    main_items = payload.get("main_items") or []
+    also_items = payload.get("also_items") or []
+    approved   = payload.get("approved") or (main_items + also_items)
+    if not main_items:
+        return None
+    return {"main_items": main_items, "also_items": also_items, "approved": approved}
+
+
+def main(news_date, label_date, dry_run=False):
+    """
+    Main pipeline. Fetches news from news_date (yesterday), labels output with label_date (today).
+    news_date: used for PIB, Wikipedia fetching (date of the news)
+    label_date: used for output filenames, database records, PDF headers (today)
+    dry_run: if True, print ranked candidates and exit before content generation.
+
+    Scoring is CONSUMER-FIRST: it uses the Mac night job's pre-scored candidates
+    (daily_scored_items) when present — that is the Railway path and needs no
+    torch/chromadb. Only a local full run (no pre-scored row) scores in-process.
+    """
+    C.log("=" * 64)
+    C.log(f"PaperSe Daily CA Pipeline — news_date={news_date.isoformat()}  label_date={label_date.isoformat()}"
+          + ("  [DRY-RUN]" if dry_run else ""))
+    C.log(f"  weekday={label_date.strftime('%A')}")
+    C.log("=" * 64)
+
+    sel = _load_scored_items(label_date)
+    if sel:
+        C.log(f"\n[1-4] Loaded {len(sel['main_items'])} MAIN + {len(sel['also_items'])} ALSO "
+              f"pre-scored candidate(s) from daily_scored_items (Mac night job)")
+    else:
+        C.log("\n[1-4] No pre-scored row for this date — scoring locally "
+              "(needs ChromaDB + Claude; the slim Railway image cannot).")
+        sel = score_and_select(news_date, label_date)
+    if not sel:
+        return None
+    main_items = sel["main_items"]
+    also_items = sel["also_items"]
+    approved   = sel["approved"]
+
     # ── DRY-RUN: show scores and stop before content generation ──────────────
     if dry_run:
         C.log("\n" + "=" * 64)
@@ -1484,7 +1554,9 @@ def main(news_date, label_date, dry_run=False):
         base = dict(date=label_date.isoformat(), category=it["category"], tier=it["tier"],
                     source=it["source"], rajasthan_angle=it["rajasthan_angle"],
                     priority=it.get("final_priority_score", it.get("priority", 0.5)),
-                    is_main=True, item_type="main")
+                    is_main=True, item_type="main",
+                    # precomputed PYQ candidates (Mac) so PDF regen never loads torch
+                    pyq=it.get("pyq_candidates"))
 
         row_en = {**base, "language": "EN", "title": en.get("title"), "summary": en.get("summary"),
                   "context": en.get("context"), "bullets": en.get("bullets"),

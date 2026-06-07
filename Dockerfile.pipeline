@@ -1,6 +1,9 @@
-# Daily CA pipeline service (Railway cron).
+# Daily CA pipeline service (Railway cron) — SLIM.
+# All embedding/ChromaDB/Layer-3 work is precomputed on the Mac night job
+# (night_scraper.py → daily_scored_items). This service only authors + formats +
+# publishes, so it installs requirements-railway.txt (NO torch/chromadb/sentence-
+# transformers) and bakes no model. That is what fixes the OOM (exit 137).
 # nixpacks couldn't reliably resolve WeasyPrint's native libs — Docker + apt does.
-# Handles the heavy deps: WeasyPrint (Pango/Cairo) and torch/chromadb.
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -15,18 +18,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
-# Python deps (chromadb, sentence-transformers/torch, weasyprint, etc.)
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-# Pre-download the sentence-transformer model (458 MB) at build time so it is
-# baked into the image. Without this every cron run downloads it from HuggingFace
-# at runtime — that is 458 MB over Railway's network on every daily cron, takes
-# several minutes, and can fail silently, killing the pipeline mid-STEP-2.
-RUN python3 -c "\
-from sentence_transformers import SentenceTransformer; \
-SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2'); \
-print('sentence-transformer model cached in image')"
+# Slim Python deps (weasyprint, flask, anthropic, requests — NO torch/chromadb).
+COPY requirements-railway.txt .
+RUN pip install -r requirements-railway.txt
 
 # App code
 COPY . .

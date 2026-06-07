@@ -1,9 +1,9 @@
-# Curator Flask server.
-# The redesigned publish flow REGENERATES the curated PDF and posts it, so this
-# service runs pdf_generator.py + telegram_delivery.py as subprocesses — which need
-# the same heavy deps as the pipeline: WeasyPrint native libs, chromadb,
-# sentence-transformers (+ baked model). (Previously this image was flask+requests
-# only, so every publish crashed at `import chromadb` in pdf_generator.)
+# Curator Flask server — SLIM.
+# The publish flow REGENERATES the curated PDF and posts it. PDF regen used to load
+# torch/chromadb (find_linked_pyqs) and OOM-killed the 512 MB box → blank "PDF regen
+# failed" + 500. Now PYQ matches are precomputed on the Mac (daily_ca_items.pyq), so
+# pdf_generator reads them and never loads a model. This image installs
+# requirements-railway.txt (NO torch/chromadb/sentence-transformers), bakes no model.
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -17,20 +17,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
-# Full Python deps (publish regenerates the PDF: weasyprint, chromadb,
-# sentence-transformers/torch, pdfplumber, flask, etc.)
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+# Slim Python deps (publish regenerates the PDF with weasyprint; PYQ is precomputed
+# on the Mac, so NO torch/chromadb/sentence-transformers here).
+COPY requirements-railway.txt .
+RUN pip install -r requirements-railway.txt
 
-# Bake the sentence-transformer model so PDF regen on publish doesn't download
-# 458 MB from HuggingFace at runtime (the model loads only in the publish
-# subprocess, so the always-on Flask server's steady-state memory is unaffected).
-RUN python3 -c "\
-from sentence_transformers import SentenceTransformer; \
-SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2'); \
-print('sentence-transformer model cached in image')"
-
-# App code (includes chroma_db/ for PYQ linking and curator_templates/)
+# App code (curator_templates/ etc.; chroma_db/ is .dockerignore'd — unused here)
 COPY . .
 
 # launch.py routes by SERVICE_MODE=curator → curator Flask server + schedulers

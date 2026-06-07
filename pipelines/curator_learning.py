@@ -85,7 +85,7 @@ class CuratorLearning:
             C.sb_insert("curator_feedback", {
                 "date": date_str,
                 "item_title": item_title,
-                "category": category,
+                "category": category or "Uncategorized",   # column is NOT NULL
                 "action": "rejected",
                 "auto_published": auto_published,
                 "item_id": str(item_id) if item_id else None,
@@ -137,7 +137,7 @@ class CuratorLearning:
             C.sb_insert("curator_feedback", {
                 "date": date_str,
                 "item_title": old_item_title,
-                "category": category,
+                "category": category or "Uncategorized",   # column is NOT NULL
                 "action": "replaced",
                 "auto_published": auto_published,
                 "item_id": str(item_id) if item_id else None,
@@ -174,7 +174,7 @@ class CuratorLearning:
             C.sb_insert("curator_feedback", {
                 "date": datetime.date.today().isoformat(),
                 "item_title": item_title,
-                "category": category,
+                "category": category or "Uncategorized",   # column is NOT NULL
                 "action": "approved",
                 "auto_published": auto_published,
                 "item_id": str(item_id) if item_id else None,
