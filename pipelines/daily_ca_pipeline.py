@@ -686,7 +686,13 @@ def fetch_wiki(date):
         except Exception as e:
             C.log(f"   ⚠ WIKI fetch failed: {e}")
             return []
-    rows = C.sb_select("wiki_cache", params={"week_start": f"eq.{week_start}", "limit": 1})
+    # best-effort: a wiki_cache read failure must never crash the pipeline (WIKI is
+    # the least-critical source — election/head-of-state items, scraped only Sundays).
+    try:
+        rows = C.sb_select("wiki_cache", params={"week_start": f"eq.{week_start}", "limit": 1})
+    except Exception as e:
+        C.log(f"   ⚠ WIKI cache read failed (non-fatal): {e}")
+        return []
     if rows:
         items = rows[0].get("items") or []
         C.log(f"   WIKI: {len(items)} items from cache (week {week_start})")
