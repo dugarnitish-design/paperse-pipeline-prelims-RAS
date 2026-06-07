@@ -316,18 +316,21 @@ def publish_with_edits(date):
     rgen = subprocess.run([sys.executable, str(C.ROOT / "pipelines" / "pdf_generator.py"), date],
                           cwd=str(C.ROOT), env=env, capture_output=True, text=True)
     if rgen.returncode != 0:
-        C.log(f"  ⚠ PDF regen failed:\n{rgen.stderr[-300:]}")
+        # Don't post a stale/missing PDF and don't report false success — surface it.
+        C.log(f"  ✗ PDF regen failed:\n{rgen.stderr[-600:]}")
+        return jsonify({"error": "PDF regeneration failed — not published. Check server logs.",
+                        "stage": "pdf_regen"}), 500
 
     mark_draft_status(date, "approved", {
         "approved_at": datetime.datetime.utcnow().isoformat() + "Z",
         "approval_method": "dashboard_selection",
-        "selected_ids": selected_ids,
+        "selected_indices": selected_ids,
     })
 
     # 6. Channel post (regenerated PDF) + PYQ polls (fired inside _publish).
     published = _publish(date)
-    return jsonify({
-        "status": "approved",
+    payload = {
+        "status": "approved" if published else "publish_failed",
         "channel_posted": published,
         "date": date,
         "selected": len(selected),
@@ -335,7 +338,12 @@ def publish_with_edits(date):
         "rejected": len(rejected),
         "also_kept": len(kept_also),
         "edited": edits_made,
-    }), 200
+    }
+    if not published:
+        # Items + PDF are saved, but the channel post failed — report it, don't fake success.
+        payload["error"] = "Channel post failed — items saved + PDF regenerated, but not sent. Check logs."
+        return jsonify(payload), 502
+    return jsonify(payload), 200
 
 
 # ── routes: Telegram webhook ──────────────────────────────────────────────────

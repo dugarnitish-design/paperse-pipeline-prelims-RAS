@@ -1,15 +1,37 @@
-# Curator Flask server — lightweight Docker image
-# Uses official python:3.11-slim (python3 always in PATH, no nixpacks issues)
+# Curator Flask server.
+# The redesigned publish flow REGENERATES the curated PDF and posts it, so this
+# service runs pdf_generator.py + telegram_delivery.py as subprocesses — which need
+# the same heavy deps as the pipeline: WeasyPrint native libs, chromadb,
+# sentence-transformers (+ baked model). (Previously this image was flask+requests
+# only, so every publish crashed at `import chromadb` in pdf_generator.)
 FROM python:3.11-slim
 
 WORKDIR /app
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
-# Install only what curator needs (fast build — no chromadb/weasyprint)
-COPY requirements_curator.txt .
-RUN pip install --no-cache-dir -r requirements_curator.txt
+# WeasyPrint native libraries (Pango / Cairo / GDK-Pixbuf / HarfBuzz) + Latin fonts.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libpango-1.0-0 libpangocairo-1.0-0 libcairo2 libgdk-pixbuf-2.0-0 \
+      libharfbuzz0b libfontconfig1 libffi-dev \
+      fonts-liberation \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy full codebase (curator_server.py imports from pipelines/)
+# Full Python deps (publish regenerates the PDF: weasyprint, chromadb,
+# sentence-transformers/torch, pdfplumber, flask, etc.)
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# Bake the sentence-transformer model so PDF regen on publish doesn't download
+# 458 MB from HuggingFace at runtime (the model loads only in the publish
+# subprocess, so the always-on Flask server's steady-state memory is unaffected).
+RUN python3 -c "\
+from sentence_transformers import SentenceTransformer; \
+SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2'); \
+print('sentence-transformer model cached in image')"
+
+# App code (includes chroma_db/ for PYQ linking and curator_templates/)
 COPY . .
 
-# python3 is always at /usr/local/bin/python3 in this image
+# launch.py routes by SERVICE_MODE=curator → curator Flask server + schedulers
 CMD ["python3", "launch.py"]

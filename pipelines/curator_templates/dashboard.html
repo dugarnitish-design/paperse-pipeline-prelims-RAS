@@ -492,23 +492,36 @@ document.getElementById('btnApprove').addEventListener('click', async () => {
 // ── Publish with Selection ────────────────────────────────────────────────
 btnPublish.addEventListener('click', async () => {
     const n = selectedCount();
-    if (n < MIN_PUBLISH) { showToast(`Select at least ${MIN_PUBLISH} items`, 'error'); return; }
+    console.log('[publish] clicked — selectedCount =', n, '| MIN_PUBLISH =', MIN_PUBLISH);
+    if (n < MIN_PUBLISH) {
+        console.warn('[publish] BLOCKED client-side: below MIN_PUBLISH');
+        showToast(`Select at least ${MIN_PUBLISH} items`, 'error'); return;
+    }
     const missing = missingReasons();
-    if (missing.length) { showToast(`Pick a reject reason for: ${missing.join(', ')}`, 'error'); return; }
-    if (!confirm(`Publish ${n} selected items to the channel?`)) return;
+    if (missing.length) {
+        console.warn('[publish] BLOCKED client-side: missing reject reasons for', missing);
+        showToast(`Pick a reject reason for: ${missing.join(', ')}`, 'error'); return;
+    }
+    if (!confirm(`Publish ${n} selected items to the channel?`)) { console.log('[publish] cancelled at confirm'); return; }
     btnPublish.disabled = true; btnPublish.textContent = 'Publishing…';
+    const fd = getFormData();
+    console.log('[publish] POST /curator/' + date + '/publish — selected_ids:', fd.getAll('selected_ids'));
     try {
-        const r = await fetch(`/curator/${date}/publish`, {method:'POST', body: getFormData()});
-        const d = await r.json();
-        if (r.ok) {
-            showToast(`✅ Published ${d.selected} items (${d.promoted} promoted, ${d.removed} removed${d.edited ? ', edits saved' : ''})`, 'success');
+        const r = await fetch(`/curator/${date}/publish`, {method:'POST', body: fd});
+        console.log('[publish] HTTP', r.status, r.statusText);
+        const d = await r.json().catch(err => { console.error('[publish] response was not JSON', err); return {}; });
+        console.log('[publish] response body:', d);
+        if (r.ok && d.channel_posted) {
+            showToast(`✅ Published ${d.selected} items (${d.promoted||0} promoted, ${d.rejected||0} rejected, ${d.also_kept||0} kept${d.edited ? ', edits saved' : ''})`, 'success');
             btnPublish.textContent = '✅ Published';
         } else {
-            showToast('⚠ ' + (d.error || 'unknown'), 'error');
+            console.error('[publish] FAILED — status', r.status, 'body', d);
+            showToast('⚠ ' + (d.error || ('HTTP ' + r.status)), 'error');
             btnPublish.disabled = false; btnPublish.textContent = '🚀 Publish with Selection';
         }
     } catch(e) {
-        showToast('Network error', 'error');
+        console.error('[publish] network/exception', e);
+        showToast('Network error — ' + e.message, 'error');
         btnPublish.disabled = false; btnPublish.textContent = '🚀 Publish with Selection';
     }
 });
