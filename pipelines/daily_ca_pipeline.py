@@ -1237,8 +1237,20 @@ def gen_also(item):
             "(what RPSC could ask):\n"
             '{"en": {"title": "...", "one_liner": "..."}, "hi": {"title": "...", "one_liner": "..."}, '
             '"rpsc_angle": "1 line"}')
-    data, _ = C.claude_json(SYS_EN, user, max_tokens=500, model=C.HAIKU_MODEL)
-    return data
+    # Fault-tolerant: Haiku occasionally emits malformed JSON — a single bad bench
+    # item must NEVER crash the whole pipeline. Fall back to a minimal item built
+    # from the source text.
+    try:
+        data, _ = C.claude_json(SYS_EN, user, max_tokens=500, model=C.HAIKU_MODEL)
+        if data.get("en", {}).get("title") and data.get("hi", {}).get("title"):
+            return data
+        raise ValueError("missing en/hi title")
+    except Exception as e:
+        C.log(f"   ⚠ gen_also fallback for {(item.get('title') or '')[:40]!r}: {e}")
+        t = (item.get("title") or "").replace("**", "").strip()[:90]
+        one = (item.get("text") or item.get("title") or "").strip()[:160]
+        return {"en": {"title": t, "one_liner": one},
+                "hi": {"title": t, "one_liner": one}, "rpsc_angle": ""}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

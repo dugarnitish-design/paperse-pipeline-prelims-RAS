@@ -5,7 +5,7 @@ and shared config (paths, model, category emojis).
 
 SKIPS everything mains-related.
 """
-import os, json, datetime, pathlib, functools
+import os, re, json, datetime, pathlib, functools
 import requests
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
@@ -180,7 +180,12 @@ def _parse_json(text):
     start, end = t.find("{"), t.rfind("}")
     if start != -1 and end != -1:
         t = t[start:end + 1]
-    return json.loads(t)
+    try:
+        return json.loads(t)
+    except json.JSONDecodeError:
+        # Lenient retry: strip trailing commas before } or ] (common LLM slip,
+        # esp. Haiku) — e.g. {"a":1,} → {"a":1}.
+        return json.loads(re.sub(r",\s*([}\]])", r"\1", t))
 
 # ── ChromaDB (lazy; heavy import) ─────────────────────────────────────────────
 @functools.lru_cache(maxsize=1)
