@@ -79,23 +79,36 @@ WORLD_KEYWORDS = [
 ]
 # Cities: keep only Rajasthan-relevant.
 CITY_KEYWORDS = ["jaipur", "rajasthan"]
-# Explained: keep only data/report/policy-flavoured pieces.
+# Explained: data/report/policy pieces + environment/wildlife (IE has no top-level
+# 'environment' slug, so conservation/climate stories are kept here and via 'india').
 EXPLAINED_KEYWORDS = [
     "survey", "report", "data", "health", "population", "economy", "index",
+    "environment", "wildlife", "conservation", "climate", "forest", "tiger",
+    "species", "ramsar", "biodiversity", "ecosystem", "pollution", "emission",
+]
+
+# Sports: FIX 2 — keep ONLY awards & records; drop match scores and squad selections.
+SPORTS_AWARD_KEYWORDS = [
+    "award", "awarded", "medal", "gold", "silver", "bronze", "champion", "championship",
+    "record", "wins", " won", "winner", "title", "trophy", "rank", "ranking",
+    "khel ratna", "arjuna", "dronacharya", "padma", "honour", "honoured", "felicitat",
+    "first indian", "fastest", "youngest", "oldest", "player of the",
 ]
 
 # Section policy, keyed by the <section> slug in /article/<section>/… URLs.
 #   None        → keep every article in the section (RPSC-core sections)
 #   [keywords]  → keep only articles whose headline matches one of the keywords
-# Sections not listed here are skipped entirely (entertainment, lifestyle,
-# technology, legal-news, business, opinion, horoscope, trending, …).
+# Sections not listed here are skipped entirely (entertainment, lifestyle, business,
+# legal-news, opinion, education, trending, cities, political-pulse, …).
+# FIX 2: front-page top stories are covered by the dated sitemap across india/explained/
+# world; cities + political-pulse dropped (party-politics noise); environment via
+# india+explained (no IE 'environment' slug); science via technology + /science/ prefilter.
 SECTION_POLICY = {
-    "sports": None,                 # full — RPSC tests national/global sports & awards
-    "india": None,                  # full — national politics, governance, schemes
-    "political-pulse": None,        # full — Indian politics / governance
-    "world": WORLD_KEYWORDS,        # India-diplomacy headlines only
-    "explained": EXPLAINED_KEYWORDS,  # data/report/policy pieces only
-    "cities": CITY_KEYWORDS,        # Rajasthan-only (also URL-prefiltered below)
+    "india": None,                       # full — national politics, governance, schemes, environment
+    "explained": EXPLAINED_KEYWORDS,     # data/report/policy + environment/wildlife pieces
+    "world": WORLD_KEYWORDS,             # India-diplomacy / agreements / MoUs only
+    "sports": SPORTS_AWARD_KEYWORDS,     # FIX 2 — awards & records ONLY (no scores/squads)
+    "technology": None,                  # FIX 2 — Science desk only (URL-prefiltered to /science/)
 }
 # NOTE: IE's "upsc-current-affairs" desk is deliberately EXCLUDED — it carries
 # study aids (daily quizzes, "UPSC Key", "Knowledge Nugget", weekly snapshots),
@@ -111,7 +124,7 @@ RAJ_CITY_SLUGS = ("jaipur", "jodhpur", "udaipur", "kota", "ajmer", "bikaner",
 # URL fragments that mark non-article content we never want.
 SKIP_URL_BITS = ("/photos/", "/photo-", "/videos/", "/video/", "/audio/",
                  "/podcast", "/gallery", "/lifestyle/", "/entertainment/",
-                 "/business/market", "/opinion/", "/technology/",
+                 "/business/market", "/opinion/",
                  "/subscribe", "/profile/", "utm_source", "/web-stories/")
 
 
@@ -263,8 +276,9 @@ def _sitemap_candidates(sess, news_date):
         section = m.group(1)
         if section not in SECTION_POLICY:
             continue
-        # Cities is huge — keep only Rajasthan-region URLs before fetching bodies.
-        if section == "cities" and not any(s in href.lower() for s in RAJ_CITY_SLUGS):
+        # FIX 2 — 'technology' includes gadget/consumer-tech; keep ONLY the science
+        # desk (/technology/science/…), where ISRO/DRDO/space/research stories live.
+        if section == "technology" and "/science/" not in href.lower():
             continue
         if href in seen:
             continue

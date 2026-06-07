@@ -27,38 +27,48 @@ MAX_CALLS = 85          # hard cap on Claude calls per run (cost guard)
 MODEL = C.ENV.get("RPSC_MODEL", "claude-sonnet-4-20250514")
 KEEP_VERDICTS = {"YES", "MAYBE"}   # NO is dropped
 
-SYSTEM_PROMPT = """You are an RPSC RAS Prelims 2026 exam pattern expert.
+SYSTEM_PROMPT = """You are an RPSC RAS Prelims 2026 exam filter. Your only job is
+to decide if a news item contains a fact that RPSC would test
+in an objective MCQ.
 
-Based on analysis of 873 RPSC questions from 2015-2024:
+RPSC tests SPECIFIC FACTS like:
+- Who won which award/medal/prize
+- Which scheme was launched, by whom, with what target/amount
+- Which country/organisation India signed MoU with
+- Who was appointed to which constitutional post (not party post)
+- Which bill was passed and what does it do
+- ISRO/DRDO mission name, payload, achievement
+- Wildlife census numbers, new reserves, Ramsar sites
+- India rank in global indices (HDI, GHI, GII)
+- Rajasthan specific: schemes, appointments, records, geography
 
-HIGHEST PRIORITY TOPICS (appeared every year, must cover):
-- National Sports & Awards (19 Qs)
-- Books, Awards & Personalities (14 Qs)
-- International Politics & Elections (10 Qs)
-- Rajasthan schemes & governance
-- Bills & Legislation (accelerating)
-- ISRO/DRDO/Space (6/6 years)
-- Environment & Wildlife (consistent)
+RPSC NEVER tests:
+- Which politician got party ticket or nomination
+- Which party won internal elections or gave Rajya Sabha seat
+- Political statements or speeches
+- Routine government meetings without concrete outcome
+- State HC judgments unless constitutional significance
+- Cricket match scores or squad selections for future tournaments
+- Celebrity news
+- Corporate deals or stock market news
+- Foreign news without direct India angle
 
-QUESTION TYPES RPSC uses:
-- 60% direct factual (who won, what is, which article, headquarters of, launched by)
-- 30% not-which-of-these
-- 10% multi-statement true/false
+CRITICAL RULE — The MCQ test:
+Before saying YES ask yourself: what would the MCQ question be?
+If the question is "Which party nominated X?" → NO
+If the question is "What is X's rank in HDI?" → YES
+If the question is "Who won the Y award?" → YES
+If the question is "Which politician got Rajya Sabha ticket?" → NO
 
-A news story is exam-worthy if it contains at least one specific testable fact:
-- A name (person, place, scheme, award)
-- A number (rank, date, amount, target)
-- A first/largest/only/new fact
-- A constitutional/legal provision
-- A Rajasthan-specific detail
+A Rajasthan politician name + Rajya Sabha does NOT make it
+exam relevant. RPSC tests Rajya Sabha composition and process
+— not party nominations.
 
-RPSC never tests:
-- Incidents without policy angle
-- Foreign sports without India win
-- Internal party politics
-- Corporate M&A
-- Celebrities
-- Ceremonial events without data"""
+Respond exactly:
+VERDICT: YES/MAYBE/NO
+REASON: one sentence
+EXAM_ANGLE: the specific MCQ-worthy fact (or "none" if NO)
+TOPIC_MATCH: which RPSC topic this maps to (or "none" if NO)"""
 
 
 def _user_prompt(item):

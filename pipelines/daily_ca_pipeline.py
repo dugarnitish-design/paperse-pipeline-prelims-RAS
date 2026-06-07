@@ -719,8 +719,9 @@ def tokenize(text):
 def load_categories():
     cats = C.sb_select("ca_categories")
     for c in cats:
-        # CORE keywords = category name + static topic link (high precision)
-        core = tokenize(c.get("category")) | tokenize(c.get("static_topic_link"))
+        # CORE keywords = category name ONLY. Static-CA link must never influence
+        # ranking/filtering (FIX 3) — it stays a display-only chapter hint.
+        core = tokenize(c.get("category"))
         # CAPTURE keywords = broader signal from what_to_capture phrases
         cap = set()
         for phrase in (c.get("what_to_capture") or []):
@@ -749,6 +750,9 @@ def load_categories():
         # single tokens ("foreign", "president") no longer cause false rejects.
         c["_ignore_phrases"] = [p.lower().strip()
                                 for p in (c.get("what_to_ignore") or []) if p and p.strip()]
+        # FIX 4 — capture phrases (lowercased) for the ×1.3 score boost in score_item.
+        c["_capture_phrases"] = [p.lower().strip()
+                                 for p in (c.get("what_to_capture") or []) if p and p.strip()]
     C.log(f"   Loaded {len(cats)} CA categories from ca_categories")
     return cats
 
@@ -980,6 +984,47 @@ def run_filters(item, cats):
     return item
 
 
+# FIX 6 — content-type classifier (MAIN needs context vs ALSO is a one-line fact).
+_ALSO_SIGNALS = (
+    "award", "awarded", "wins ", " won ", "winner", "medal", "gold", "silver", "bronze",
+    "prize", "laureate", "honour", "honoured", "honored", "felicitat", "conferred",
+    "appointed", "appointment", "takes charge", "takes over as", "resign", "resignation",
+    "sworn in", "named as", "elevated to",
+    "rank", "ranked", "ranking", " index", "tops the", "topped",
+    "record", "fastest", "youngest", "oldest", "longest", "tallest",
+    "champion", " title", "trophy", " cup", "gold medal",
+    "elected", "re-elected", "poll result", "election result", "by-election",
+)
+_MAIN_SIGNALS = (
+    "scheme", "yojana", "mission", "policy", "launch", "rolled out", "amend",
+    "bill", " act ", "ordinance", "passed", "amendment", "constitution", "article ",
+    "supreme court", "verdict", "ruling", "judgment", "judgement",
+    "mou", "agreement", "pact", "treaty", "signed with", "summit",
+    "wildlife", "conservation", "reserve", "ramsar", "census", "tiger", "sanctuary",
+    "biodiversity", "ecosystem", "emission", "climate",
+    "isro", "drdo", "satellite", "spacecraft", "vaccine", "semiconductor",
+    "budget", "allocation", "guidelines", "regulation", "notified", "framework",
+    "initiative", "programme", "corridor", "operation",
+)
+
+
+def classify_item_type(item):
+    """FIX 6 — classify a passing item by CONTENT TYPE:
+      'main' → needs context/understanding (scheme/bill/policy/constitutional/MoU/
+               environment/Rajasthan-governance/science-tech achievement)
+      'also' → fact only, one line suffices (award/appointment/sports result/index
+               rank/simple milestone/election result)
+    Clear award/appointment/rank/sports items go to 'also'; everything else (including
+    policy/scheme/bill and the ambiguous) defaults to 'main'. A MAIN signal wins (a
+    scheme launched around an award is still MAIN)."""
+    blob = ((item.get("title") or "") + " " + (item.get("text") or "")).lower()
+    cat = (item.get("category") or "").lower()
+    main_hit = any(s in blob for s in _MAIN_SIGNALS)
+    also_hit = (any(s in blob for s in _ALSO_SIGNALS)
+                or any(k in cat for k in ("sports & awards", "books, awards", "personalit", "appointment")))
+    return "also" if (also_hit and not main_hit) else "main"
+
+
 def score_item(item, cats):
     """LAYER: category_keyword_filter — SCORE ONLY (not a hard gate).
 
@@ -1011,6 +1056,14 @@ def score_item(item, cats):
         # 1.0). Scaling priority by it deprioritises repeatedly-rejected categories
         # in tomorrow's ranking. tier_weight=1.0 → no change (current behaviour).
         tier_weight = float(best.get("tier_weight") or 1.0)
+        # FIX 4 — what_to_capture / what_to_ignore intent multiplier:
+        #   matches what_to_ignore  → ×0.3 (e.g. party nomination sinks, never top-5)
+        #   matches what_to_capture → ×1.3 (appointments, reforms, SC judgments…)
+        # Ignore takes precedence; mirrors the ignore-phrase / 3-loose-token rule.
+        _ignored = (any(re.search(r"\b" + re.escape(p) + r"\b", low) for p in best.get("_ignore_phrases", []))
+                    or len(toks & best.get("_ignore_kw", set())) >= 3)
+        _captured = any(re.search(r"\b" + re.escape(p) + r"\b", low) for p in best.get("_capture_phrases", []))
+        intent_mult = 0.3 if _ignored else (1.3 if _captured else 1.0)
         priority = TIER_BASE.get(tier, 0.4) + 0.05 * best_score
         if item_raj:
             priority += 0.3
@@ -1027,9 +1080,10 @@ def score_item(item, cats):
             "category": best.get("category"), "tier": tier,
             "rajasthan_angle": item_raj or bool(best.get("rajasthan_angle")),
             "static_connect": static_connect, "static_subject": best.get("static_subject"),
-            "exam_ref": exam_ref, "priority": round(priority * quality * tier_weight, 3),
+            "exam_ref": exam_ref,
+            "priority": round(priority * quality * tier_weight * intent_mult, 3),
             "match_score": best_score, "match_core": best_core,
-            "text_quality": round(quality, 2),
+            "text_quality": round(quality, 2), "intent_mult": intent_mult,
         })
     else:
         item.update({
@@ -1265,23 +1319,21 @@ def main(news_date, label_date, dry_run=False):
     # Use final_priority_score from RAG enrichment (incorporates topic_kb + PYQ boosts)
     approved.sort(key=lambda x: x.get("final_priority_score", x["priority"]), reverse=True)
 
-    # 3a. MAIN — prefer one item per category for variety, then ALWAYS backfill to
-    #     5 from the remaining high-scorers (FIX 4: never cap below 5 when ≥5 exist).
-    main_items, seen_cat = [], set()
+    # 3a. FIX 6 — classify by CONTENT TYPE, then MAIN-type items fill the top section
+    #     first (cap 5). Only if fewer than 3 MAIN-type exist do we promote the
+    #     highest-scoring ALSO-type items to reach a floor of 3. (`approved` is already
+    #     sorted best-first, so the pools preserve that order.)
     for it in approved:
-        if it["category"] in seen_cat:
-            continue
-        seen_cat.add(it["category"]); main_items.append(it)
-        if len(main_items) == 5:
-            break
-    if len(main_items) < 5:
-        have = {id(x) for x in main_items}
-        for it in approved:                       # backfill ignoring category
-            if id(it) in have:
-                continue
-            main_items.append(it); have.add(id(it))
-            if len(main_items) == 5:
-                break
+        it["content_type"] = classify_item_type(it)
+    main_pool = [it for it in approved if it["content_type"] == "main"]
+    also_pool = [it for it in approved if it["content_type"] == "also"]
+    main_items = main_pool[:5]
+    promoted_n = 0
+    if len(main_items) < 3:
+        promoted_n = min(3 - len(main_items), len(also_pool))
+        main_items = main_items + also_pool[:promoted_n]
+    C.log(f"   → content-type: {len(main_pool)} MAIN-type, {len(also_pool)} ALSO-type "
+          f"→ top section {len(main_items)} (promoted {promoted_n} ALSO to floor of 3)")
 
     chosen_ids = {id(x) for x in main_items}
     rest = [x for x in approved if id(x) not in chosen_ids]
@@ -1319,8 +1371,8 @@ def main(news_date, label_date, dry_run=False):
         if len(also_items) == 5:
             break
 
-    for it in main_items: it["is_main"] = True
-    for it in also_items: it["is_main"] = False
+    for it in main_items: it["is_main"] = True;  it["item_type"] = "main"
+    for it in also_items: it["is_main"] = False; it["item_type"] = "also"
     C.log(f"   → MAIN (is_main=true): {len(main_items)} | ALSO IN NEWS: {len(also_items)}")
     for i, it in enumerate(main_items, 1):
         C.log(f"      {i}. [{it['priority']:.3f}] {it['category']} · {it['source']} :: {it['title'][:70]}")
@@ -1374,7 +1426,7 @@ def main(news_date, label_date, dry_run=False):
         base = dict(date=label_date.isoformat(), category=it["category"], tier=it["tier"],
                     source=it["source"], rajasthan_angle=it["rajasthan_angle"],
                     priority=it.get("final_priority_score", it.get("priority", 0.5)),
-                    is_main=True)
+                    is_main=True, item_type="main")
 
         row_en = {**base, "language": "EN", "title": en.get("title"), "summary": en.get("summary"),
                   "context": en.get("context"), "bullets": en.get("bullets"),
@@ -1394,7 +1446,7 @@ def main(news_date, label_date, dry_run=False):
         a = gen_also(it)
         base = dict(date=label_date.isoformat(), category=it["category"], tier=it["tier"],
                     source=it["source"], rajasthan_angle=it["rajasthan_angle"],
-                    priority=it["priority"], is_main=False,
+                    priority=it["priority"], is_main=False, item_type="also",
                     static_connect=it.get("static_connect"))
         C.sb_insert("daily_ca_items", [
             {**base, "language": "EN", "title": a["en"]["title"], "one_liner": a["en"]["one_liner"]},
