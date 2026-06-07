@@ -1091,11 +1091,18 @@ def score_item(item, cats):
             "text_quality": round(quality, 2), "intent_mult": intent_mult,
         })
     else:
+        # FIX 1 — no category matched. A flat 0.2 made every uncategorised item tie.
+        # Differentiate by Rajasthan + testable-fact density (digits / proper-nouns in
+        # the headline = RPSC-testable specifics). Layer-3 verdict + PYQ + topic_kb
+        # boosts are layered on in RAG enrichment (final_priority_score).
+        _title = item.get("title") or ""
+        _spec = sum(1 for w in _title.split() if w[:1].isupper() or any(ch.isdigit() for ch in w))
+        base = 0.2 + (0.3 if item_raj else 0.0) + min(0.15, 0.02 * _spec)
         item.update({
             "category": None, "tier": 3, "rajasthan_angle": item_raj,
             "static_connect": None, "static_subject": None, "exam_ref": None,
-            "priority": round(0.2 * quality, 3), "match_score": 0, "match_core": 0,
-            "text_quality": round(quality, 2),
+            "priority": round(base * quality, 3), "match_score": 0, "match_core": 0,
+            "text_quality": round(quality, 2), "intent_mult": 1.0,
         })
     return item
 
@@ -1468,7 +1475,8 @@ def main(news_date, label_date, dry_run=False):
         a = gen_also(it)
         base = dict(date=label_date.isoformat(), category=it["category"], tier=it["tier"],
                     source=it["source"], rajasthan_angle=it["rajasthan_angle"],
-                    priority=it["priority"], is_main=False, item_type="also",
+                    priority=it.get("final_priority_score", it.get("priority", 0.5)),
+                    is_main=False, item_type="also",
                     static_connect=it.get("static_connect"))
         C.sb_insert("daily_ca_items", [
             {**base, "language": "EN", "title": a["en"]["title"], "one_liner": a["en"]["one_liner"],

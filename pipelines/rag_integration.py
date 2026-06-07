@@ -196,6 +196,10 @@ def calculate_final_priority(item):
     score = item.get("priority", item.get("ca_tier_score", 0.5))
     score += item.get("pyq_boost", 0)
     score += item.get("topic_kb_boost", 0)
+    # FIX 1 — Layer-3 RPSC-relevance verdict drives the final score (so exam-relevance,
+    # not just a keyword-category match, differentiates items — esp. uncategorised ones
+    # that otherwise tied at 0.2). YES clearly outranks MAYBE.
+    score += {"YES": 0.4, "MAYBE": 0.15}.get((item.get("rpsc_verdict") or "").upper(), 0.0)
 
     item["final_priority_score"] = round(score, 3)
     return item
