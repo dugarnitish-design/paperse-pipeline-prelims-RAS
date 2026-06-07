@@ -113,7 +113,7 @@ def main(date):
                 "difficulty": diff,
                 "source_item_id": it["id"],
             })
-            C.log(f"      Q{q_no} [{qtype} · d{diff}] {it['category'][:28]:28s} "
+            C.log(f"      Q{q_no} [{qtype} · d{diff}] {(it.get('category') or 'General')[:28]:28s} "
                   f"correct={correct} :: {str(m.get('question'))[:60]}")
             q_no += 1
 
