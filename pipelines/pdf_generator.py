@@ -80,7 +80,6 @@ body.hi, .hi {{ font-family:'NotoDeva','Noto Sans Devanagari', sans-serif; }}
         color:{DEFAULT_CAT_COLOR}; margin-bottom:3px; }}
 .title {{ font-size:18px; font-weight:700; color:#1a1a1a; margin:1px 0 2px; line-height:1.2; }}
 .summary {{ font-size:14px; font-weight:600; font-style:italic; color:#4b5563; margin-bottom:2px; }}
-.context {{ font-size:12px; color:#1f2937; line-height:1.4; margin:0 0 3px; }}
 ul {{ margin:4px 0 5px 0; padding-left:18px; }}
 li {{ font-size:12px; color:#1f2937; margin-bottom:2px; line-height:1.4; }}
 li b, li strong {{ color:#000000; font-weight:700; }}
@@ -283,9 +282,9 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
         # RAG tags (from item attributes set during enrichment, or live topic_kb lookup)
         tags_html = _build_tag_html(it)
 
-        # FIX 3: static-connect display removed — it is internal pipeline metadata,
-        # not exam content. The item shows category, title, summary, context, bullets,
-        # RPSC angle and RAG tags only.
+        # FIX 3 + context removal: static-connect AND the background "context" paragraph
+        # are both gone — internal/non-essential. The item shows category, title,
+        # summary, bullets (testable facts), RPSC angle and RAG tags only.
         rpsc_html = (f'<div class="rpsc-angle">{L["rpsc_angle"]}: {md_bold(it.get("rpsc_angle"))}</div>'
                      if it.get("rpsc_angle") else "")
 
@@ -294,7 +293,6 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
           <div class="cat" style="color:{color};">{esc(it.get('category'))}</div>
           <div class="title">{esc(it.get('title')).replace('**','')}</div>
           <div class="summary">{md_bold(it.get('summary'))}</div>
-          <div class="context">{md_bold(it.get('context'))}</div>
           <ul>{bullets}</ul>
           {rpsc_html}
           {tags_html}

@@ -1233,6 +1233,17 @@ RPSC कोण: यह बताए कि इस समाचार से RPSC
 समाचार-पत्र शैली नहीं — परीक्षा-कोच शैली।
 """
 
+def _group_key(it):
+    """Stable per-story key SHARED by the EN and HI rows of one item, so curator
+    status/is_main changes always update both languages in lockstep (see
+    curator_server._set_status_with_hi). Prefer the source URL; fall back to
+    source+title for items without a URL (e.g. some WIKI rows)."""
+    url = (it.get("url") or "").strip()
+    if url:
+        return url[:300]
+    return f"{it.get('source', '')}|{(it.get('title') or '').replace('**', '')[:120]}"
+
+
 def gen_main(item, lang):
     sysmsg = SYS_EN if lang == "EN" else SYS_HI
     hint = f"\nStatic chapter hint: {item.get('static_connect')}." if item.get("static_connect") else ""
@@ -1553,6 +1564,8 @@ def main(news_date, label_date, dry_run=False):
                     source=it["source"], rajasthan_angle=it["rajasthan_angle"],
                     priority=it.get("final_priority_score", it.get("priority", 0.5)),
                     is_main=True, item_type="main",
+                    # shared EN/HI key so curator status changes stay in lockstep
+                    group_key=_group_key(it),
                     # precomputed PYQ candidates (Mac) so PDF regen never loads torch
                     pyq=it.get("pyq_candidates"))
 
@@ -1576,6 +1589,7 @@ def main(news_date, label_date, dry_run=False):
                     source=it["source"], rajasthan_angle=it["rajasthan_angle"],
                     priority=it.get("final_priority_score", it.get("priority", 0.5)),
                     is_main=False, item_type="also",
+                    group_key=_group_key(it),   # shared EN/HI key (lockstep status)
                     static_connect=it.get("static_connect"))
         C.sb_insert("daily_ca_items", [
             {**base, "language": "EN", "title": a["en"]["title"], "one_liner": a["en"]["one_liner"],

@@ -204,9 +204,12 @@ def approve_without_edits(date):
 
 def _set_status_with_hi(date: str, item: dict, status: str, is_main=None) -> None:
     """
-    Set status (and optionally is_main) on an EN item by id AND its HI counterpart
-    (matched on date+category+priority). Never deletes — FIX 6 keeps every item in
-    daily_ca_items so un-promoted also-in-news and rejected mains survive curation.
+    Set status (and optionally is_main) on an EN item by id AND its HI counterpart,
+    so the two languages NEVER drift apart (e.g. EN promotes a story to main but HI
+    is left as also-in-news). The HI row is matched on group_key — a stable shared
+    key (source URL) stamped on both rows at insert. Legacy rows without group_key
+    fall back to the old date+category+priority match. Never deletes — FIX 6 keeps
+    every item so un-promoted also-in-news and rejected mains survive curation.
     Status values: 'published' | 'also_in_news' | 'rejected' (default 'pending').
     """
     patch = {"status": status}
@@ -215,10 +218,17 @@ def _set_status_with_hi(date: str, item: dict, status: str, is_main=None) -> Non
     try:
         if item.get("id"):
             C.sb_update("daily_ca_items", patch, {"id": str(item["id"])})
-        C.sb_update("daily_ca_items", patch, {
-            "date": date, "language": "HI",
-            "category": item.get("category", ""), "priority": item.get("priority"),
-        })
+        gk = item.get("group_key")
+        if gk:
+            # robust: HI row sharing the same source-story key
+            C.sb_update("daily_ca_items", patch, {
+                "date": date, "language": "HI", "group_key": gk})
+        else:
+            # legacy fallback (rows inserted before group_key existed)
+            C.sb_update("daily_ca_items", patch, {
+                "date": date, "language": "HI",
+                "category": item.get("category", ""), "priority": item.get("priority"),
+            })
     except Exception as e:
         C.log(f"  ⚠ could not set status={status} for {item.get('id')}: {e}")
 
