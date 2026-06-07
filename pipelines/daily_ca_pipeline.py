@@ -665,8 +665,23 @@ def fetch_wiki(date):
     """Source 4 — Wikipedia Current Events. Scrape Sundays; else from cache.
     Filter: elections / heads of state or government changes only."""
     week_start = (date - datetime.timedelta(days=date.weekday())).isoformat()  # Monday
-    KEEP = ("elect", "president", "prime minister", "head of state", "head of government",
-            "chancellor", "sworn in", "resign", "appointed", "coup", "referendum")
+    WIKI_MAX = 10
+    # TIGHT patterns — keep ONLY (a) election results, (b) new heads of state/government,
+    # (c) major international appointments. The old substring list (bare "elect",
+    # "president", "appointed", …) matched electricity / presidential palace / routine
+    # appointments → 75-item bloat. Word-boundary regex + proximity is far stricter.
+    WIKI_PATTERNS = [re.compile(p, re.I) for p in (
+        r"\b(wins?|won)\b[^.]{0,40}\belection",                       # X wins ... election
+        r"\belection[^.]{0,40}\b(win|won|victory|result)",            # election ... result
+        r"\belected\b[^.]{0,25}\b(president|prime minister|chancellor|premier|leader)",
+        r"\bsworn in as\b[^.]{0,30}\b(president|prime minister|chancellor|premier)",
+        r"\b(becomes|named|appointed|elected)\b[^.]{0,30}\b(president|prime minister|chancellor|premier|secretary[- ]general|director[- ]general)",
+        r"\bnew\b[^.]{0,15}\b(president|prime minister|head of (state|government))\b",
+        r"\bpresidential election\b",
+        r"\bgeneral election\b[^.]{0,25}\bresult",
+    )]
+    def _wiki_keep(t):
+        return any(p.search(t) for p in WIKI_PATTERNS)
     if date.weekday() == 6:  # Sunday
         try:
             import requests
@@ -678,10 +693,12 @@ def fetch_wiki(date):
             items = []
             for li in soup.select(".current-events-content li, .description li"):
                 txt = " ".join(li.get_text(" ", strip=True).split())
-                if len(txt) > 20 and any(k in txt.lower() for k in KEEP):
+                if len(txt) > 20 and _wiki_keep(txt):
                     items.append({"source": "WIKI", "title": txt[:90], "text": txt})
+                    if len(items) >= WIKI_MAX:    # hard cap regardless
+                        break
             C.sb_upsert("wiki_cache", {"week_start": week_start, "items": items}, on_conflict="week_start")
-            C.log(f"   WIKI: {len(items)} election/head-of-state items, cached ({week_start})")
+            C.log(f"   WIKI: {len(items)} election/head-of-state items (cap {WIKI_MAX}), cached ({week_start})")
             return items
         except Exception as e:
             C.log(f"   ⚠ WIKI fetch failed: {e}")
@@ -694,7 +711,7 @@ def fetch_wiki(date):
         C.log(f"   ⚠ WIKI cache read failed (non-fatal): {e}")
         return []
     if rows:
-        items = rows[0].get("items") or []
+        items = (rows[0].get("items") or [])[:WIKI_MAX]   # cap stale/oversized caches too
         C.log(f"   WIKI: {len(items)} items from cache (week {week_start})")
         return items
     C.log(f"   WIKI: no cache for week {week_start} (only scraped Sundays); skipping.")
