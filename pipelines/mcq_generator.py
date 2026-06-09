@@ -23,7 +23,10 @@ RPSC QUESTION PATTERN (follow strictly):
 - 10% Multi-statement: "Which of the following statements are correct: 1. ___ 2. ___ 3. ___"
 
 STRICT QUALITY RULES:
-1. Question must test ONE specific fact from the news
+1. Test ONE stable recurring topic fact that will be valid next year too — per the
+   CATEGORY PATTERNS for this item's category. Use the news as the topic hook only. Do
+   NOT test the volatile news event (which state did X, how many years was it
+   suspended, this week's change).
 2. The fact must be: name, number, date, place, scheme name, policy name, record, award name
 3. All 4 options must be plausible and similar
    - If answer is a number → all options are numbers
@@ -60,6 +63,43 @@ BAD QUESTION EXAMPLES (never generate these):
 "Who is the Union Minister for Petroleum and Natural Gas?" — ministerial position, changes
 "Which city did the Nepal FM fly from?" — irrelevant procedural detail
 "What did India's mother think about the chess tournament?" — family/personal angle
+
+CATEGORY PATTERNS — what RPSC tests vs NEVER tests, by category:
+
+Wildlife & Environment:
+  TESTS: reserve full name, state location, species involved, designation (Tiger Reserve/
+    Ramsar/Biosphere/National Park), total count of that reserve type in India
+  NEVER: individual animal age, exact entry dates, individual animal behaviour, population of one specific animal
+
+National Science & Technology:
+  TESTS: organisation name (ISRO/DRDO/CSIR), mission/weapon/technology name, first/largest/only
+    achievement, key number (range/altitude/capacity)
+  NEVER: internal structural design, material composition, technical specifications, engineering details
+
+National Sports & Awards:
+  TESTS: winner full name, award exact name, tournament name, defeated whom, edition/year
+  NEVER: match scores, team compositions, training details, player statistics
+
+National Schemes & Governance:
+  TESTS: scheme full name, launch year, implementing ministry, key provision (days/amount),
+    target beneficiaries, unique feature
+  NEVER: state-level implementation, administrative meeting outcomes, budget allocation for specific states
+
+International Politics & Elections:
+  TESTS: agreement name, partner country, India rank in global indices, key provision, which organisation published report
+  NEVER: nuclear warhead counts, missile deployment details, diplomatic visit itinerary, number of days of visit
+
+Books, Awards & Personalities:
+  TESTS: award name, winner name, category, which institution gives the award, year
+  NEVER: book plot details, personal biography details, childhood stories
+
+Bills & Legislation:
+  TESTS: bill exact name, Article it relates to, what it changes, who passed it, key provision
+  NEVER: voting margins, debate details, committee member names
+
+Monetary Policy & RBI:
+  TESTS: rate name (repo/reverse repo/CRR/SLR), new rate value, what changed from before, RBI Governor name, MPC full form
+  NEVER: technical banking operations, individual bank performance, stock market impact
 
 RAJASTHAN RULE:
 At least 1 out of every 5 MCQs must have a Rajasthan angle if any Rajasthan news is in today's top 5.
@@ -128,6 +168,35 @@ def _news_text(item):
     return " ".join(p for p in parts if p).strip()
 
 
+def _pyq_examples(item, k=3):
+    """Real RPSC PYQs matched to this news item → 'question … Answer: …' style anchors.
+    daily_ca_items.pyq gives year+q_no (ChromaDB match, computed on the Mac); the full
+    question + correct answer come from the `questions` table (Supabase REST read, so
+    this works on Railway too). Used so generated MCQs mirror genuine RPSC pattern."""
+    out = []
+    for c in (item.get("pyq") or [])[:k]:
+        yr, qno = c.get("year"), str(c.get("q_no") or "").strip()
+        if not (yr and qno):
+            continue
+        try:
+            rows = C.sb_select("questions", params={
+                "year": f"eq.{yr}", "q_no": f"eq.{qno}", "limit": "1"})
+        except Exception as e:
+            C.log(f"   ⚠ PYQ fetch failed ({yr} Q{qno}): {e}")
+            rows = None
+        if not rows:
+            continue
+        q = rows[0]
+        qt = " ".join((q.get("question") or "").split())
+        ans = (q.get("correct_text") or "").strip()
+        if not ans:                                  # fall back to the lettered option
+            ca = str(q.get("correct_ans") or "").strip()
+            ans = (q.get(f"option_{ca}") or "").strip() if ca in "1234" else ""
+        if qt:
+            out.append(f"(RPSC RAS {yr}) {qt}" + (f"  Answer: {ans}" if ans else ""))
+    return out
+
+
 def _strip_prefix(s):
     """'A) National Biofuel Policy' → 'National Biofuel Policy' (handles A) A. A- A:)."""
     return re.sub(r"^\s*[A-Da-d]\s*[\).\-:]\s*", "", (s or "").strip()).strip()
@@ -161,9 +230,25 @@ def gen_mcq(item, types):
     n = len(types)
     spec = "; ".join(f"#{i + 1} must be {TYPE_DIRECTIVE.get(t, TYPE_DIRECTIVE['DIRECT-FACTUAL'])}"
                      for i, t in enumerate(types))
+    # PYQ connection — feed the item's matched real RPSC questions (full text + answer)
+    # so generated MCQs are modelled on genuine RPSC pattern/difficulty.
+    examples = _pyq_examples(item)
+    ex_block = ""
+    if examples:
+        ex_block = ("\nHere are real RPSC questions asked about this topic in past exams:\n"
+                    + "\n".join(f"- {e}" for e in examples) + "\n"
+                    "Generate NEW questions in the SAME style, difficulty and type as these "
+                    "real RPSC questions. Do NOT repeat them — model your questions on their pattern.\n")
     user = (f"NEWS ITEM:\n{_news_text(item)}\n\n"
             f"Category: {item.get('category')}\n"
-            f"RPSC Angle (what this item should test): {item.get('rpsc_angle') or '—'}\n\n"
+            f"RPSC Angle (what this item should test): {item.get('rpsc_angle') or '—'}\n"
+            f"{ex_block}\n"
+            f"Use the news ONLY as the topic hook. Ask about the underlying scheme/reserve/"
+            f"organisation per the CATEGORY PATTERNS — NOT about today's specific event.\n"
+            f"  GOOD: Under which Act was MGNREGS launched?\n"
+            f"  GOOD: How many days of employment does MGNREGS guarantee?\n"
+            f"  BAD:  After how many years did the Centre resume MGNREGS?\n"
+            f"  BAD:  Which state recently resumed MGNREGS?\n\n"
             f"Generate exactly {n} high-quality MCQ{'s' if n > 1 else ''} from THIS item only "
             f"(do not draw on any other news), in this order: {spec}. "
             f"Follow the STRICT QUALITY RULES and the OUTPUT FORMAT exactly. "
@@ -203,6 +288,104 @@ def _to_row(q, item, ds, q_no, planned_type=None):
     }
 
 
+# ── FIX B: post-generation quality gate ─────────────────────────────────────────
+QGATE_SYS = """You are an RPSC RAS Prelims MCQ quality checker.
+
+For each MCQ check:
+1. Is the answer a STABLE fact that will be true next year and 5 years from now?
+2. Does this test KNOWLEDGE of a topic or just memory of one news article?
+3. Would this question make sense in an exam without reading today's news?
+4. Has RPSC asked similar questions before about this topic?
+
+Return KEEP if all 4 are true. Return REJECT if any 1 is false.
+
+ALWAYS REJECT:
+- Questions about animal ages or individual counts
+- Questions about nuclear warhead numbers
+- Questions about which state did what today
+- Questions about visit durations or itineraries
+- Questions where the answer changes every year
+- Questions testing article reading, not knowledge
+
+ALWAYS KEEP:
+- Questions about scheme names and launch years
+- Questions about reserve names and states
+- Questions about award winners and tournaments
+- Questions about constitutional provisions
+- Questions about organisation names and achievements"""
+
+
+def quality_gate(mcqs):
+    """One Haiku call that judges each MCQ → returns a list[bool] (keep) aligned to
+    `mcqs` (each: {question, options[list], correct, category}). Fail-open: on a gate
+    error or a missing verdict, KEEP (never silently wipe the brief)."""
+    if not mcqs:
+        return []
+    lines = []
+    for i, m in enumerate(mcqs, 1):
+        opts = " | ".join(m.get("options") or [])
+        lines.append(f"{i}. [{m.get('category')}] Q: {m.get('question')} | OPTIONS: {opts} "
+                     f"| ANSWER: {m.get('correct')}")
+    user = ('Judge each MCQ below. Return ONLY JSON: '
+            '{"results":[{"n":1,"decision":"KEEP|REJECT"}, ...]} — one entry per MCQ, in order.\n\n'
+            + "\n".join(lines))
+    try:
+        data, _ = C.claude_json(QGATE_SYS, user, max_tokens=900, model=C.HAIKU_MODEL)
+        verdicts = {int(r["n"]): str(r.get("decision", "KEEP")).strip().upper().startswith("KEEP")
+                    for r in (data.get("results") or []) if "n" in r}
+    except Exception as e:
+        C.log(f"   ⚠ quality gate failed — keeping all ({e})")
+        return [True] * len(mcqs)
+    return [verdicts.get(i, True) for i in range(1, len(mcqs) + 1)]
+
+
+def _gate_keep(cands):
+    """Filter candidate dicts {q,item,type} through the quality gate."""
+    keep = quality_gate([{"question": c["q"].get("question"),
+                          "options": c["q"].get("options"),
+                          "correct": c["q"].get("correct"),
+                          "category": c["item"].get("category")} for c in cands])
+    return [c for c, k in zip(cands, keep) if k]
+
+
+def _qkey(q):
+    return re.sub(r"\W+", " ", (q.get("question") or "").lower()).strip()
+
+
+def _generate_candidates(items, alloc, type_seq, total):
+    """Per-item generation (FIX C): one Haiku call per item, 1-2 type-steered MCQs each.
+    Returns candidate dicts {q, item, type}."""
+    cands, ti = [], 0
+    for it, n in zip(items, alloc):
+        if ti >= total:
+            break
+        n = min(n, total - ti)
+        types = type_seq[ti:ti + n]
+        ti += n
+        try:
+            qs = gen_mcq(it, types)
+        except Exception as e:
+            C.log(f"   ⚠ MCQ gen failed for item {it.get('id')}: {e}")
+            continue
+        for k, q in enumerate(qs):
+            cands.append({"q": q, "item": it, "type": types[k] if k < len(types) else None})
+    return cands
+
+
+def _select_spread(cands, cap=8, max_per_item=2):
+    """FIX C: keep ≤max_per_item per source item, cap total; preserve order."""
+    out, per = [], {}
+    for c in cands:
+        iid = c["item"].get("id")
+        if per.get(iid, 0) >= max_per_item:
+            continue
+        out.append(c)
+        per[iid] = per.get(iid, 0) + 1
+        if len(out) >= cap:
+            break
+    return out
+
+
 def main(date):
     ds = date.isoformat()
     C.log("=" * 64)
@@ -230,40 +413,50 @@ def main(date):
     C.log(f"   Generating up to {total} MCQs · type plan: "
           f"{ {t: type_seq.count(t) for t in TYPES} }")
 
-    C.sb_delete("daily_mcqs", {"date": ds})  # idempotent re-run for this date
-
-    rows, q_no, ti = [], 1, 0
-    for it, n in zip(items, alloc):
-        if q_no > cap or ti >= total:
+    # Generate (per item) → quality-gate → regenerate if <3 survive (max 2 extra
+    # attempts) → spread (≤2/item, cap 8). FIX B + C.
+    kept, seen = [], set()
+    for attempt in range(3):                       # 1 initial + up to 2 regenerations
+        cands = _generate_candidates(items, alloc, type_seq, total)
+        cands = [c for c in cands if _qkey(c["q"]) and _qkey(c["q"]) not in seen]
+        for c in cands:
+            seen.add(_qkey(c["q"]))
+        passed = _gate_keep(cands)
+        C.log(f"   gate attempt {attempt + 1}: {len(cands)} generated → {len(passed)} kept")
+        kept.extend(passed)
+        if len(kept) >= 3:
             break
-        n = min(n, total - ti)
-        types = type_seq[ti:ti + n]
-        ti += n
-        try:
-            qs = gen_mcq(it, types)
-        except Exception as e:
-            C.log(f"   ⚠ MCQ gen failed for item {it['id']}: {e}")
+        if attempt < 2:
+            C.log(f"   ↻ only {len(kept)} quality MCQs — regenerating…")
+
+    final = _select_spread(kept, cap=cap, max_per_item=2)
+    if not final:
+        C.log("✗ No MCQs passed the quality gate.")
+        return None
+    items_covered = len({c['item'].get('id') for c in final})
+    if items_covered < 3:
+        C.log(f"   ⚠ only {items_covered} distinct news item(s) covered (target ≥3) — "
+              f"limited by available/quality items today")
+
+    C.sb_delete("daily_mcqs", {"date": ds})  # idempotent re-run for this date
+    rows, q_no = [], 1
+    for c in final:
+        row = _to_row(c["q"], c["item"], ds, q_no, planned_type=c.get("type"))
+        if not row:
             continue
-        for k, q in enumerate(qs):
-            if q_no > cap:
-                break
-            planned = types[k] if k < len(types) else None
-            row = _to_row(q, it, ds, q_no, planned_type=planned)
-            if not row:
-                C.log(f"   ⚠ skipped malformed MCQ for item {it['id']}")
-                continue
-            rows.append(row)
-            C.log(f"      Q{q_no} [{row['question_type']} · d{row['difficulty']}] "
-                  f"{(it.get('category') or 'General')[:26]:26s} correct={row['correct']} "
-                  f":: {str(row['question'])[:58]}")
-            q_no += 1
+        rows.append(row)
+        C.log(f"      Q{q_no} [{row['question_type']} · d{row['difficulty']}] "
+              f"{(c['item'].get('category') or 'General')[:26]:26s} correct={row['correct']} "
+              f":: {str(row['question'])[:58]}")
+        q_no += 1
 
     if not rows:
         C.log("✗ No MCQs generated.")
         return None
     C.sb_insert("daily_mcqs", rows, returning=False)
     cnt = C.sb_count("daily_mcqs", {"date": f"eq.{ds}"})
-    C.log(f"\n✓ STEP 3 complete — {cnt} MCQs in daily_mcqs for {ds}")
+    C.log(f"\n✓ STEP 3 complete — {cnt} MCQs in daily_mcqs for {ds} "
+          f"(across {items_covered} news items)")
     return cnt
 
 
