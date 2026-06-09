@@ -156,18 +156,29 @@ def claude():
     import anthropic
     return anthropic.Anthropic(api_key=ANTHROPIC_KEY)
 
-def claude_json(system, user, max_tokens=1000, model=CLAUDE_MODEL):
+def _sys_param(system, cache_system):
+    """Build the `system` argument. When cache_system=True, wrap the prompt in a
+    content block with cache_control=ephemeral so Anthropic prompt-caching kicks in:
+    a system prompt re-sent within 5 min (e.g. Layer-3 across 60-85 calls, gen_main,
+    MCQ) is billed at ~10% input cost on cache hits. Pure billing change — same model,
+    same prompt, identical output. Below the model's min cacheable length the flag is
+    silently ignored (no error)."""
+    if cache_system and system:
+        return [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+    return system
+
+def claude_json(system, user, max_tokens=1000, model=CLAUDE_MODEL, cache_system=False):
     """Call Claude and parse a JSON object from the reply (robust to fences)."""
     msg = claude().messages.create(
-        model=model, max_tokens=max_tokens, system=system,
+        model=model, max_tokens=max_tokens, system=_sys_param(system, cache_system),
         messages=[{"role": "user", "content": user}],
     )
     text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip()
     return _parse_json(text), text
 
-def claude_text(system, user, max_tokens=1000, model=CLAUDE_MODEL):
+def claude_text(system, user, max_tokens=1000, model=CLAUDE_MODEL, cache_system=False):
     msg = claude().messages.create(
-        model=model, max_tokens=max_tokens, system=system,
+        model=model, max_tokens=max_tokens, system=_sys_param(system, cache_system),
         messages=[{"role": "user", "content": user}],
     )
     return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip()

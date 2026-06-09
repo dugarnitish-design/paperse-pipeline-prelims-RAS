@@ -107,7 +107,10 @@ def _parse(reply):
 
 def check(item):
     """Single Claude relevance call. Returns the parsed verdict dict."""
-    reply = C.claude_text(SYSTEM_PROMPT, _user_prompt(item), max_tokens=200, model=MODEL)
+    # cache_system: SYSTEM_PROMPT is re-sent on every candidate (60-85×/run) — caching
+    # it bills cache hits at ~10% input cost. Biggest single prompt-caching win.
+    reply = C.claude_text(SYSTEM_PROMPT, _user_prompt(item), max_tokens=200, model=MODEL,
+                          cache_system=True)
     return _parse(reply)
 
 

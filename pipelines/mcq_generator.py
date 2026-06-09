@@ -253,7 +253,8 @@ def gen_mcq(item, types):
             f"(do not draw on any other news), in this order: {spec}. "
             f"Follow the STRICT QUALITY RULES and the OUTPUT FORMAT exactly. "
             f"Return ONLY the JSON object.")
-    data, _ = C.claude_json(SYS, user, max_tokens=1300, model=C.HAIKU_MODEL)  # cost-opt: Haiku
+    data, _ = C.claude_json(SYS, user, max_tokens=1300, model=C.HAIKU_MODEL,
+                            cache_system=True)  # cost-opt: Haiku + cached system prompt
     if not isinstance(data, dict):
         return []
     qs = data.get("questions")
@@ -330,7 +331,8 @@ def quality_gate(mcqs):
             '{"results":[{"n":1,"decision":"KEEP|REJECT"}, ...]} — one entry per MCQ, in order.\n\n'
             + "\n".join(lines))
     try:
-        data, _ = C.claude_json(QGATE_SYS, user, max_tokens=900, model=C.HAIKU_MODEL)
+        data, _ = C.claude_json(QGATE_SYS, user, max_tokens=900, model=C.HAIKU_MODEL,
+                                cache_system=True)
         verdicts = {int(r["n"]): str(r.get("decision", "KEEP")).strip().upper().startswith("KEEP")
                     for r in (data.get("results") or []) if "n" in r}
     except Exception as e:

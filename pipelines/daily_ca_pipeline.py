@@ -1531,7 +1531,7 @@ def gen_main(item, lang):
             '"bullets": ["EXACTLY 5 bullets, max 15 words each, key facts wrapped in **double asterisks** '
             '(null if verdict NO)"], '
             '"rpsc_angle": "RPSC can ask: Q1: ...? / Q2: ...? / Q3: ...?  (null if verdict NO)"}')
-    data, _ = C.claude_json(sysmsg, user, max_tokens=1200)
+    data, _ = C.claude_json(sysmsg, user, max_tokens=1200, cache_system=True)  # cache SYS_EN/SYS_HI
     data["bullets"] = data.get("bullets") or []
     data["rpsc_angle"] = data.get("rpsc_angle") or ""
     data["verdict"] = (data.get("verdict") or "YES").strip().upper()
@@ -1539,6 +1539,21 @@ def gen_main(item, lang):
     data["news_type"] = str(data.get("news_type") or "").strip().upper()   # "1".."9" or "DEFAULT"
     data["title"] = (item.get("title") or "").replace("**", "").strip()   # title from the news item
     return data
+
+# Slim system prompt for bench/also-in-news one-liners (cost-opt: ~80 tokens vs the
+# full ~2k-token SYS_EN, on Haiku). Bench items only need a single sentence.
+SLIM_ALSO_PROMPT = """You write one-line current affairs facts for RPSC RAS exam preparation.
+
+Write exactly ONE sentence about this news.
+Format: [Subject] + [action] + [key fact].
+Bold the single most testable fact using **
+Maximum 20 words total.
+No political angles. Facts only.
+
+Example:
+Input: MGNREGS resumed in West Bengal
+Output: Centre resumed **MGNREGS** in West Bengal after 4-year suspension under **MG-NREGA Act 2005**."""
+
 
 def gen_also(item):
     """Bench / also-in-news item — LIGHTWEIGHT (cost optimisation): title + one-liner
@@ -1559,7 +1574,7 @@ def gen_also(item):
     # item must NEVER crash the whole pipeline. Fall back to a minimal item built
     # from the source text.
     try:
-        data, _ = C.claude_json(SYS_EN, user, max_tokens=500, model=C.HAIKU_MODEL)
+        data, _ = C.claude_json(SLIM_ALSO_PROMPT, user, max_tokens=500, model=C.HAIKU_MODEL)
         if data.get("en", {}).get("title") and data.get("hi", {}).get("title"):
             return data
         raise ValueError("missing en/hi title")
@@ -1722,7 +1737,7 @@ def score_and_select(news_date, label_date):
             continue
         seen_sigs.append(toks)
         also_items.append(it)
-        if len(also_items) == 15:    # bench pool for curator replacement (PDF caps at 5)
+        if len(also_items) == 8:     # bench pool for curator replacement (PDF caps at 5)
             break
 
     for it in main_items: it["is_main"] = True;  it["item_type"] = "main"
