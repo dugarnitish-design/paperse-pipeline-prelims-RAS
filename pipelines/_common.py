@@ -67,6 +67,9 @@ CATEGORY_EMOJI = {
     "international organisations & reports": "🌍", "global": "🌍",
     "rajasthan": "🗺️", "science": "🔬", "science & technology": "🔬",
     "national science & technology": "🔬",
+    "wildlife & environment": "🌿",
+    "national schemes & governance": "🏛️",
+    "monetary policy & rbi": "🏦",
 }
 
 def emoji_for(category: str) -> str:

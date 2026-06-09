@@ -37,6 +37,10 @@ DEFAULT_CAT_COLOR = "#11203a"
 def category_color(category):
     c = (category or "").lower()
     if "rajasthan" in c:                              return "#F57F17"  # amber
+    # New categories (checked before the generic national/science fallbacks below).
+    if "wildlife" in c or "environment" in c:         return "#1B5E20"  # green (environment family)
+    if "scheme" in c:                                 return "#0D47A1"  # blue (national schemes)
+    if "monetary" in c or "rbi" in c:                 return "#EF6C00"  # orange (RBI)
     if "health" in c or "population" in c:            return "#2E7D32"  # green
     if "sport" in c:                                  return "#6A1B9A"  # purple
     if "book" in c:                                   return "#4E342E"  # brown

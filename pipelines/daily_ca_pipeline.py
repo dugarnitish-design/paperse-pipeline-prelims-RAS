@@ -805,6 +805,25 @@ SNT_EXPLICIT_TOKENS = {
     "research", "chandrayaan", "gaganyaan", "spadex", "supercomputer", "telescope",
 }
 
+# Negative category rules — hard-block a category when distinctive tokens make the
+# match impossible, no matter the loose keyword overlap. Fixes the observed mislabels:
+# MGNREGS→Sports, Tiger Reserve→Health, gallantry awards→Sports.
+# Each entry: (trigger substrings in the lowercased text, forbidden category substring).
+NEGATIVE_CATEGORY_RULES = [
+    (("mgnregs", "mgnrega", "nrega", "rural employment"), "sports & awards"),
+    (("tiger", "tigress", "reserve", "sanctuary", "wildlife"), "health & population"),
+    (("gallantry", "vir chakra", "param vir", "shaurya chakra", "ashoka chakra",
+      "kirti chakra", "investiture"), "sports & awards"),
+]
+
+def _category_blocked(low, category):
+    """True if a negative rule forbids this category for this text."""
+    cat = (category or "").lower()
+    for triggers, forbidden in NEGATIVE_CATEGORY_RULES:
+        if forbidden in cat and any(t in low for t in triggers):
+            return True
+    return False
+
 TIER_BASE = {1: 1.0, 2: 0.7, 3: 0.4}
 
 def _text_quality(text):
@@ -1081,6 +1100,8 @@ def score_item(item, cats):
 
     best, best_score, best_core = None, 0, 0
     for c in cats:
+        if _category_blocked(low, c.get("category")):   # negative rules (Part B)
+            continue
         core_set = toks & c["_core_kw"]
         if not core_set:
             continue
@@ -1454,6 +1475,31 @@ RPSC पेपर में 40% राजस्थान सामग्री �
 - बुलेट 2-5 के लिए अपने प्रशिक्षण-ज्ञान का उपयोग करें
 """
 
+# Map the combined prompt's detected news_type → canonical ca_categories name. TYPE
+# detection beats the loose keyword scorer (which mislabelled e.g. MGNREGS as Sports).
+# TYPE 7 (Rajasthan) and DEFAULT keep the keyword category.
+TYPE_CATEGORY = {
+    "1": "National Schemes & Governance",
+    "2": "Books, Awards & Personalities",
+    "3": "Wildlife & Environment",
+    "4": "International Politics & Elections",
+    "5": "National Science & Technology",
+    "6": "National Sports & Awards",
+    "8": "Bills & Legislation",
+    "9": "Monetary Policy & RBI",
+}
+
+def _category_from_type(news_type, keyword_category):
+    """Resolve the display category from the detected news_type, overriding the loose
+    keyword result. TYPE 7 forces a Rajasthan category (keeps the keyword one if it is
+    already Rajasthan-specific); DEFAULT / unknown keep the keyword category."""
+    nt = (news_type or "").strip().upper()
+    if nt == "7":
+        kc = keyword_category or ""
+        return kc if kc.startswith("Rajasthan") else "Rajasthan Politics & Governance"
+    return TYPE_CATEGORY.get(nt, keyword_category)
+
+
 def _group_key(it):
     """Stable per-story key SHARED by the EN and HI rows of one item, so curator
     status/is_main changes always update both languages in lockstep (see
@@ -1479,6 +1525,7 @@ def gen_main(item, lang):
             f"TYPE format (EXACTLY 5 bullets, bullet 1 = the news fact, bullets 2-5 from your own "
             f"knowledge). Return ONLY JSON:\n"
             '{"verdict": "YES|MAYBE|NO", "reason": "one line", '
+            '"news_type": "the TYPE number 1-9 you used, or DEFAULT", '
             '"item_type": "main|also|null", "needs_verify": true, '
             '"summary": "one line why in news today (null if verdict NO)", '
             '"bullets": ["EXACTLY 5 bullets, max 15 words each, key facts wrapped in **double asterisks** '
@@ -1489,6 +1536,7 @@ def gen_main(item, lang):
     data["rpsc_angle"] = data.get("rpsc_angle") or ""
     data["verdict"] = (data.get("verdict") or "YES").strip().upper()
     data["needs_verify"] = bool(data.get("needs_verify"))
+    data["news_type"] = str(data.get("news_type") or "").strip().upper()   # "1".."9" or "DEFAULT"
     data["title"] = (item.get("title") or "").replace("**", "").strip()   # title from the news item
     return data
 
@@ -1799,7 +1847,11 @@ def main(news_date, label_date, dry_run=False):
             continue
         hi = gen_main(it, "HI")
         needs_verify = bool(en.get("needs_verify") or hi.get("needs_verify"))
-        base = dict(date=label_date.isoformat(), category=it["category"], tier=it["tier"],
+        # Category from the detected news_type (overrides the loose keyword scorer).
+        cat = _category_from_type(en.get("news_type"), it.get("category"))
+        if cat != it.get("category"):
+            C.log(f"     ↳ category: {it.get('category')} → {cat} (TYPE {en.get('news_type')})")
+        base = dict(date=label_date.isoformat(), category=cat, tier=it["tier"],
                     source=it["source"], rajasthan_angle=it["rajasthan_angle"],
                     priority=it.get("final_priority_score", it.get("priority", 0.5)),
                     is_main=True, item_type="main",
@@ -1816,7 +1868,7 @@ def main(news_date, label_date, dry_run=False):
         ins = C.sb_insert("daily_ca_items", [row_en, row_hi])
         # keep the EN row id as canonical "source item" for MCQs
         en_id = next((r["id"] for r in ins if r["language"] == "EN"), ins[0]["id"])
-        main_rows_inserted.append({"id": en_id, "category": it["category"],
+        main_rows_inserted.append({"id": en_id, "category": cat,
                                    "title": en.get("title"), "needs_verify": needs_verify})
 
     # Bench items promoted into mains (backfill) must NOT also appear in also-in-news.
