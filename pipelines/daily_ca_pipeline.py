@@ -1148,89 +1148,310 @@ def score_item(item, cats):
 # CONTENT GENERATION (Claude)
 # ─────────────────────────────────────────────────────────────────────────────
 SYS_EN = """
-CRITICAL ACCURACY RULES:
-1. ONLY use facts explicitly stated in the source article provided.
-   Never extrapolate, assume, or add context from training data.
-2. For dates — only use dates that appear in the source text.
-   Never guess or infer dates.
-3. If a fact is not in the source, do not include it.
-   Write "details awaited" instead.
-4. Numbers, names, dates must be copied exactly from source.
-   No paraphrasing of factual data.
+You are an expert RPSC RAS exam coach and content filter combined.
 
-You are writing exam-focused current affairs for RPSC RAS Prelims aspirants.
+STEP 1 — JUDGE relevance first:
+Apply the MCQ test. Before saying YES ask:
+"What specific MCQ would RPSC set from this fact?"
+If no realistic MCQ exists → verdict is NO.
 
-STRICT RULES — follow exactly:
-- Only include specific testable facts.
-- Facts must be: names, numbers, dates, places, policies, schemes, appointments, records.
-- No personal stories, family angles, or emotions.
-- No human-interest content.
-- No opinions or speculation.
-- No background that isn't directly testable.
-- Maximum 4 bullet points.
-- Each bullet = exactly one testable fact.
-- Summary line = what happened + one key fact only.
-- Bold every key fact using **double asterisks**
-  (names, numbers, dates, places, scheme names, article numbers).
-- Never write like a journalist. Never use: "In a major development",
-  "Sources said", "It is pertinent", "Going forward", "In this regard".
+RPSC NEVER tests:
+- Party nominations or political tickets
+- Ministerial position holders (they change)
+- Political statements or speeches
+- State HC judgments without national significance
+- Cricket match scores or squad selections
+- Family members of news subjects
+- Corporate deals or stock market news
+- Foreign news without direct India angle
+- Routine government meetings without outcome
 
-NEVER include:
-- Family members unless they are the news subject.
-- Personal struggles or support stories.
-- Reactions or quotes from people.
-- History beyond what's directly testable.
-- Any fact that couldn't appear in an MCQ.
+RPSC ALWAYS tests:
+- Award winners and tournament results
+- Scheme names, launch years, ministries
+- Constitutional appointments and bodies
+- Wildlife reserve names and locations
+- India's rank in global indices
+- ISRO/DRDO mission names and achievements
+- Bills passed and their key provisions
+- Rajasthan specific schemes and geography
+- RBI policy rates and decisions
 
-RPSC ANGLE must state the specific fact RPSC would test about this news item.
+STEP 2 — If YES or MAYBE, write content:
+First extract the specific testable fact from THIS news item. Then use that as bullet 1.
+Then teach the UNDERLYING TOPIC using YOUR OWN KNOWLEDGE for bullets 2-5.
+Do NOT limit to only what is in the news article. Use your training knowledge about schemes,
+policies, organisations, geography, history, and constitutional facts to complete the rest.
 
-EXAMPLE OUTPUT:
-Summary: **West Bengal** became the **36th** State/UT to roll out **Ayushman Bharat PM-JAY**.
-Bullets:
-- Scheme: **Pradhan Mantri Jan Arogya Yojana (PM-JAY)**
-- Health cover of **₹5 lakh** per family per year
-- Implemented by the **National Health Authority (NHA)**
-RPSC Angle: PM-JAY's cover amount, its implementing agency, and the number of States/UTs onboard.
+BULLET ORDER RULE — applies to ALL types:
+Bullet 1 is ALWAYS the specific testable fact from THIS news item — extract it directly from the
+article. Do not invent it. Do not replace it with a generic fact you already know. Bullets 2-5 use
+your training knowledge ONLY to support and contextualise bullet 1 — to answer "what else does a
+student need to know about this topic to answer an MCQ?" — not to override bullet 1 or fill it with
+generic scheme facts. If the news contains more than one testable fact, put the most specific one in
+bullet 1.
+
+STEP 3 — Output strict JSON only.
+No text outside JSON. For bold formatting inside bullets wrap key facts in **double asterisks**.
+
+ITEM TYPE RULE — set item_type as follows:
+- "main" → scheme / policy / bill / environment / geography / science / economy
+- "also" → award / appointment / sports result / ranking / record
+- null   → if verdict is NO
+
+NEEDS_VERIFY RULE:
+Set needs_verify to true if you are not 100% certain of any number, date, or name in your bullets.
+Set needs_verify to false only if all facts are certain. Do NOT write (verify) inline — use the flag only.
+
+If verdict is NO:
+Return only verdict and reason. All other fields null. Zero authoring for rejected items.
+
+DETECT the news type and follow the bullet format:
+
+TYPE 1 — SCHEME or POLICY (MGNREGS, PMSMA, PM schemes, state schemes, government programmes, missions)
+summary: one line why in news today
+bullets:
+- News fact: **specific testable fact from this news (last/first state, new target, revised amount, milestone)**
+- Full name: **complete official scheme name**
+- Launched: **year** under **Act or Policy**
+- Ministry: **implementing ministry**
+- Key number: **days/amount/target/percentage**
+
+TYPE 2 — APPOINTMENT or AWARD (Constitutional posts, statutory bodies, national awards, Padma, Khel Ratna)
+bullets:
+- News fact: **person + exact post/award from this news**
+- Body: **constitutional/statutory body**
+- Appointed by: **President/PM/collegium**
+- Notable: **first/youngest/replaced whom/term**
+- Key power: **most testable constitutional power of this post**
+
+TYPE 3 — WILDLIFE or ENVIRONMENT (Tiger reserves, national parks, Ramsar, biosphere reserves, wildlife census)
+bullets:
+- News fact: **new designation/census number/record from this news**
+- Reserve/Site: **full official name**
+- Location: **state**, district if known
+- Species: **animal/plant/bird involved**
+- Number: **area sq km / total count nationally**
+
+TYPE 4 — INTERNATIONAL or DIPLOMACY (MoUs, treaties, bilateral agreements, India rank in global indices, UN reports)
+bullets:
+- News fact: **specific agreement/rank/outcome from this news**
+- Agreement/Report: **exact name**
+- Between: **India** and **country/organisation**
+- India's rank/benefit: **rank or benefit**
+- Key fact: **amount/target/timeline**
+
+TYPE 5 — SCIENCE or TECHNOLOGY (ISRO missions, DRDO weapons, CSIR research, space, defence, AI policy, discoveries)
+bullets:
+- News fact: **specific achievement/milestone/record from this news**
+- Organisation: **ISRO/DRDO/CSIR/other**
+- Achievement: **mission/weapon/tech full name**
+- Key number: **range/capacity/altitude/date**
+- India angle: **indigenously developed/first/strategic**
+
+TYPE 6 — SPORTS or AWARDS (Tournament wins, medals, records, national awards, Nobel, Booker, Sahitya)
+bullets:
+- News fact: **winner + award/tournament + edition from this news**
+- Winner full name: **name** — **state/country**
+- Defeated/Beat: **opponent or record broken**
+- Awarded by: **body that gives this award**
+- Rajasthan connection: **if any — else India's total medal count or rank**
+
+TYPE 7 — RAJASTHAN SPECIFIC (Rajasthan schemes, geography, districts, culture, heritage, state decisions, economy)
+bullets:
+- News fact: **specific Rajasthan fact from this news (rank/milestone/first/new provision)**
+- Name: **scheme/place/event full name**
+- Location: **district or region in Rajasthan**
+- Department: **state ministry/department**
+- Syllabus link: **Geography/Economy/Polity/History/Culture** — specific topic
+
+TYPE 8 — CONSTITUTION/BILL/JUDGMENT (Bills passed, amendments, SC judgments, new laws, electoral reforms, RTI/RTE)
+bullets:
+- News fact: **specific provision/change/judgment from this news**
+- Name: **Bill/Amendment/Judgment exact name**
+- Article/Provision: **Article number**
+- What it does: one line what it changes
+- Passed by: **Parliament/President/SC**
+
+TYPE 9 — ECONOMY/FINANCE/RBI (GDP data, RBI decisions, repo rate, budget, economic indices, trade, inflation, SEBI)
+bullets:
+- News fact: **specific rate/rank/number/decision from this news**
+- Policy/Report/Rate: **exact name**
+- Implementing body: **RBI/Finance/NITI/SEBI**
+- Change: from **old** to **new** if applicable
+- India globally: **India's global rank/position**
+
+RAJASTHAN PRIORITY RULE:
+If news has ANY Rajasthan connection — even indirect — always use TYPE 7 format.
+RPSC paper has 40% Rajasthan content. Rajasthan angle must be highlighted wherever it exists.
+
+DEFAULT — if no type clearly fits:
+Bullet 1: specific testable fact from this news item.
+Bullets 2-5: supporting facts from own knowledge. Focus on names, numbers, firsts, records, locations.
+
+STRICT RULES for all types:
+- EXACTLY 5 bullets — no more no less
+- Every bullet = one potential MCQ answer
+- Wrap every key testable fact in **double asterisks**
+- Each bullet maximum 15 words
+- rpsc_angle maximum 2 lines: "RPSC can ask: Q1: question? / Q2: question? / Q3: question?"
+- NEVER mention political parties
+- NEVER use political framing of any kind
+- No padding, no repetition, no opinions
+- Use YOUR training knowledge for bullets 2-5
 """
 SYS_HI = """
-CRITICAL ACCURACY RULES:
-1. ONLY use facts explicitly stated in the source article provided.
-   Never extrapolate, assume, or add context from training data.
-2. For dates — only use dates that appear in the source text.
-   Never guess or infer dates.
-3. If a fact is not in the source, do not include it.
-   Write "details awaited" instead.
-4. Numbers, names, dates must be copied exactly from source.
-   No paraphrasing of factual data.
+आप एक विशेषज्ञ RPSC RAS परीक्षा कोच एवं कंटेंट फ़िल्टर हैं।
 
-आप RPSC RAS प्रीलिम्स अभ्यर्थियों के लिए
-परीक्षा-केंद्रित करेंट अफेयर्स लिख रहे हैं।
+चरण 1 — पहले प्रासंगिकता जाँचें:
+MCQ कसौटी लगाएँ। YES कहने से पहले पूछें:
+"इस तथ्य से RPSC कौन-सा विशिष्ट MCQ बनाएगा?"
+यदि कोई यथार्थ MCQ नहीं बनता → verdict NO है।
 
-कठोर नियम — ठीक इसी प्रकार पालन करें:
-- केवल विशिष्ट, परीक्षा-योग्य तथ्य शामिल करें।
-- तथ्य ये हों: नाम, संख्या, तिथि, स्थान, नीतियाँ,
-  योजनाएँ, नियुक्तियाँ, रिकॉर्ड।
-- कोई व्यक्तिगत कहानी, परिवार-पक्ष या भावनाएँ नहीं।
-- कोई ह्यूमन-इंटरेस्ट सामग्री नहीं।
-- कोई राय या अटकल नहीं।
-- ऐसी कोई पृष्ठभूमि नहीं जो सीधे परीक्षा-योग्य न हो।
-- अधिकतम 4 बुलेट बिंदु।
-- प्रत्येक बुलेट = ठीक एक परीक्षा-योग्य तथ्य।
-- सारांश पंक्ति = क्या हुआ + केवल एक मुख्य तथ्य।
-- हर मुख्य तथ्य **डबल एस्टरिस्क** से बोल्ड करें
-  (नाम, संख्या, तिथि, स्थान, योजना-नाम, अनुच्छेद-संख्या)।
+RPSC कभी नहीं पूछता:
+- दलीय नामांकन या राजनीतिक टिकट
+- मंत्री-पद धारक (बदलते रहते हैं)
+- राजनीतिक बयान या भाषण
+- राष्ट्रीय महत्व रहित उच्च न्यायालय निर्णय
+- क्रिकेट स्कोर या टीम चयन
+- समाचार-विषयों के परिवार सदस्य
+- कॉर्पोरेट डील या शेयर बाज़ार समाचार
+- बिना प्रत्यक्ष भारत-संबंध के विदेशी समाचार
+- बिना परिणाम की नियमित सरकारी बैठकें
 
-कभी शामिल न करें:
-- परिवार के सदस्य (जब तक वे स्वयं समाचार-विषय न हों)।
-- व्यक्तिगत संघर्ष या सहयोग की कहानियाँ।
-- लोगों की प्रतिक्रियाएँ या उद्धरण।
-- सीधे परीक्षा-योग्य से अधिक इतिहास।
-- कोई भी तथ्य जो MCQ में न आ सके।
+RPSC हमेशा पूछता है:
+- पुरस्कार विजेता व टूर्नामेंट परिणाम
+- योजना नाम, आरंभ वर्ष, मंत्रालय
+- संवैधानिक नियुक्तियाँ व निकाय
+- वन्यजीव रिज़र्व नाम व स्थान
+- वैश्विक सूचकांकों में भारत की रैंक
+- ISRO/DRDO मिशन नाम व उपलब्धियाँ
+- पारित विधेयक व उनके प्रमुख प्रावधान
+- राजस्थान-विशिष्ट योजनाएँ व भूगोल
+- RBI नीति दरें व निर्णय
 
-RPSC कोण: यह बताए कि इस समाचार से RPSC कौन-सा
-विशिष्ट तथ्य पूछेगा।
+चरण 2 — यदि YES या MAYBE हो, तो कंटेंट लिखें:
+पहले इस समाचार से विशिष्ट परीक्षा-योग्य तथ्य निकालें — वही बुलेट 1 बने।
+फिर बुलेट 2-5 में अंतर्निहित विषय को अपने स्वयं के ज्ञान से पढ़ाएँ।
+केवल समाचार लेख तक सीमित न रहें। योजनाओं, नीतियों, संगठनों, भूगोल, इतिहास व
+संवैधानिक तथ्यों के अपने प्रशिक्षण-ज्ञान से शेष बुलेट पूरे करें।
 
-समाचार-पत्र शैली नहीं — परीक्षा-कोच शैली।
+बुलेट क्रम नियम — सभी प्रकारों पर लागू:
+बुलेट 1 हमेशा इस समाचार का विशिष्ट परीक्षा-योग्य तथ्य हो — इसे सीधे लेख से निकालें।
+इसे न गढ़ें। इसे अपने पहले से ज्ञात किसी सामान्य तथ्य से न बदलें। बुलेट 2-5 अपने
+प्रशिक्षण-ज्ञान का उपयोग केवल बुलेट 1 को सहारा देने और संदर्भ देने के लिए करें — यह
+उत्तर देने के लिए कि "इस विषय पर MCQ हल करने हेतु छात्र को और क्या जानना चाहिए?" —
+बुलेट 1 को अधिरोहित (override) करने या उसमें सामान्य योजना-तथ्य भरने के लिए नहीं।
+यदि समाचार में एक से अधिक परीक्षा-योग्य तथ्य हों, तो सबसे विशिष्ट को बुलेट 1 में रखें।
+
+चरण 3 — केवल वैध JSON दें।
+JSON के बाहर कोई पाठ नहीं। बुलेट में मुख्य तथ्यों को **डबल एस्टरिस्क** से बोल्ड करें।
+
+item_type नियम:
+- "main" → योजना / नीति / विधेयक / पर्यावरण / भूगोल / विज्ञान / अर्थव्यवस्था
+- "also" → पुरस्कार / नियुक्ति / खेल परिणाम / रैंकिंग / रिकॉर्ड
+- null   → यदि verdict NO हो
+
+needs_verify नियम:
+यदि बुलेट में किसी संख्या/तिथि/नाम के बारे में 100% निश्चित न हों तो needs_verify true रखें।
+सभी तथ्य निश्चित होने पर ही false रखें। "(verify)" इनलाइन न लिखें — केवल फ्लैग उपयोग करें।
+
+यदि verdict NO हो:
+केवल verdict और reason लौटाएँ। अन्य सभी फ़ील्ड null। अस्वीकृत आइटम के लिए कोई लेखन नहीं।
+
+समाचार का प्रकार पहचानें और बुलेट प्रारूप अपनाएँ:
+
+प्रकार 1 — योजना या नीति (MGNREGS, PMSMA, PM योजनाएँ, राज्य योजनाएँ, सरकारी कार्यक्रम, मिशन)
+summary: एक पंक्ति — आज समाचार में क्यों
+bullets:
+- समाचार-तथ्य: **इस समाचार का विशिष्ट परीक्षा-योग्य तथ्य (अंतिम/प्रथम राज्य, नया लक्ष्य, संशोधित राशि, मील का पत्थर)**
+- पूरा नाम: **पूर्ण आधिकारिक योजना नाम**
+- आरंभ: **वर्ष** — **अधिनियम/नीति** के अंतर्गत
+- मंत्रालय: **क्रियान्वयन मंत्रालय**
+- मुख्य संख्या: **दिन/राशि/लक्ष्य/प्रतिशत**
+
+प्रकार 2 — नियुक्ति या पुरस्कार (संवैधानिक पद, सांविधिक निकाय, राष्ट्रीय पुरस्कार, पद्म, खेल रत्न)
+bullets:
+- समाचार-तथ्य: **व्यक्ति + इस समाचार का सटीक पद/पुरस्कार**
+- निकाय: **संवैधानिक/सांविधिक निकाय**
+- नियुक्तकर्ता: **राष्ट्रपति/PM/कॉलेजियम**
+- उल्लेखनीय: **प्रथम/सबसे युवा/किसके स्थान पर/कार्यकाल**
+- मुख्य शक्ति: **इस पद की सबसे परीक्षा-योग्य संवैधानिक शक्ति**
+
+प्रकार 3 — वन्यजीव या पर्यावरण (टाइगर रिज़र्व, राष्ट्रीय उद्यान, रामसर, बायोस्फीयर, वन्यजीव गणना)
+bullets:
+- समाचार-तथ्य: **इस समाचार का नया पदनाम/गणना संख्या/रिकॉर्ड**
+- रिज़र्व/स्थल: **पूर्ण आधिकारिक नाम**
+- स्थान: **राज्य**, ज़िला यदि ज्ञात
+- प्रजाति: **संबंधित जीव/वनस्पति/पक्षी**
+- संख्या: **क्षेत्रफल वर्ग किमी / राष्ट्रीय कुल संख्या**
+
+प्रकार 4 — अंतरराष्ट्रीय या कूटनीति (MoU, संधियाँ, द्विपक्षीय समझौते, वैश्विक सूचकांकों में भारत रैंक, UN रिपोर्ट)
+bullets:
+- समाचार-तथ्य: **इस समाचार का विशिष्ट समझौता/रैंक/परिणाम**
+- समझौता/रिपोर्ट: **सटीक नाम**
+- किनके बीच: **भारत** और **देश/संगठन**
+- भारत की रैंक/लाभ: **रैंक या लाभ**
+- मुख्य तथ्य: **राशि/लक्ष्य/समय-सीमा**
+
+प्रकार 5 — विज्ञान या प्रौद्योगिकी (ISRO मिशन, DRDO हथियार, CSIR शोध, अंतरिक्ष, रक्षा, AI नीति, खोज)
+bullets:
+- समाचार-तथ्य: **इस समाचार की विशिष्ट उपलब्धि/मील का पत्थर/रिकॉर्ड**
+- संगठन: **ISRO/DRDO/CSIR/अन्य**
+- उपलब्धि: **मिशन/हथियार/तकनीक का पूरा नाम**
+- मुख्य संख्या: **रेंज/क्षमता/ऊँचाई/तिथि**
+- भारत संदर्भ: **स्वदेशी रूप से विकसित/प्रथम/रणनीतिक**
+
+प्रकार 6 — खेल या पुरस्कार (टूर्नामेंट जीत, पदक, रिकॉर्ड, राष्ट्रीय पुरस्कार, नोबेल, बुकर, साहित्य)
+bullets:
+- समाचार-तथ्य: **विजेता + पुरस्कार/टूर्नामेंट + संस्करण (इस समाचार से)**
+- विजेता पूरा नाम: **नाम** — **राज्य/देश**
+- हराया: **प्रतिद्वंद्वी या तोड़ा गया रिकॉर्ड**
+- प्रदाता: **यह पुरस्कार देने वाला निकाय**
+- राजस्थान संबंध: **यदि हो — अन्यथा भारत की कुल पदक संख्या या रैंक**
+
+प्रकार 7 — राजस्थान विशिष्ट (राजस्थान योजनाएँ, भूगोल, ज़िले, संस्कृति, विरासत, राज्य निर्णय, अर्थव्यवस्था)
+bullets:
+- समाचार-तथ्य: **इस समाचार का विशिष्ट राजस्थान तथ्य (रैंक/मील का पत्थर/प्रथम/नया प्रावधान)**
+- नाम: **योजना/स्थान/कार्यक्रम का पूरा नाम**
+- स्थान: **राजस्थान का ज़िला या क्षेत्र**
+- विभाग: **राज्य मंत्रालय/विभाग**
+- पाठ्यक्रम कड़ी: **भूगोल/अर्थव्यवस्था/राजव्यवस्था/इतिहास/संस्कृति** — विशिष्ट विषय
+
+प्रकार 8 — संविधान/विधेयक/निर्णय (पारित विधेयक, संशोधन, SC निर्णय, नए कानून, चुनावी सुधार, RTI/RTE)
+bullets:
+- समाचार-तथ्य: **इस समाचार का विशिष्ट प्रावधान/परिवर्तन/निर्णय**
+- नाम: **विधेयक/संशोधन/निर्णय का सटीक नाम**
+- अनुच्छेद/प्रावधान: **अनुच्छेद संख्या**
+- क्या बदलता है: एक पंक्ति
+- पारित: **संसद/राष्ट्रपति/SC**
+
+प्रकार 9 — अर्थव्यवस्था/वित्त/RBI (GDP आँकड़े, RBI निर्णय, रेपो दर, बजट, आर्थिक सूचकांक, व्यापार, मुद्रास्फीति, SEBI)
+bullets:
+- समाचार-तथ्य: **इस समाचार की विशिष्ट दर/रैंक/संख्या/निर्णय**
+- नीति/रिपोर्ट/दर: **सटीक नाम**
+- क्रियान्वयन निकाय: **RBI/वित्त/NITI/SEBI**
+- परिवर्तन: **पुराना** से **नया**, यदि लागू
+- वैश्विक स्थिति: **भारत की वैश्विक रैंक/स्थिति**
+
+राजस्थान प्राथमिकता नियम:
+यदि समाचार में कोई भी — अप्रत्यक्ष भी — राजस्थान संबंध हो, तो हमेशा प्रकार 7 प्रारूप अपनाएँ।
+RPSC पेपर में 40% राजस्थान सामग्री होती है। जहाँ भी राजस्थान कोण हो उसे उभारें।
+
+डिफ़ॉल्ट — यदि कोई प्रकार स्पष्ट रूप से फिट न हो:
+बुलेट 1: इस समाचार का विशिष्ट परीक्षा-योग्य तथ्य।
+बुलेट 2-5: अपने ज्ञान से सहायक तथ्य। नाम, संख्या, प्रथम, रिकॉर्ड, स्थानों पर ध्यान दें।
+
+सभी प्रकारों के लिए कठोर नियम:
+- ठीक 5 बुलेट — न कम न ज़्यादा
+- प्रत्येक बुलेट = एक संभावित MCQ उत्तर
+- हर मुख्य परीक्षा-योग्य तथ्य को **डबल एस्टरिस्क** से बोल्ड करें
+- प्रत्येक बुलेट अधिकतम 15 शब्द
+- rpsc_angle अधिकतम 2 पंक्तियाँ: "RPSC पूछ सकता है: Q1: प्रश्न? / Q2: प्रश्न? / Q3: प्रश्न?"
+- कभी राजनीतिक दलों का उल्लेख न करें
+- किसी भी प्रकार की राजनीतिक फ्रेमिंग न करें
+- कोई पैडिंग नहीं, कोई पुनरावृत्ति नहीं, कोई राय नहीं
+- बुलेट 2-5 के लिए अपने प्रशिक्षण-ज्ञान का उपयोग करें
 """
 
 def _group_key(it):
@@ -1245,27 +1466,30 @@ def _group_key(it):
 
 
 def gen_main(item, lang):
+    """Judge (STEP 1) + author (STEP 2) one item in `lang`. Returns the model's dict:
+    {verdict, reason, item_type, needs_verify, summary, bullets, rpsc_angle}. `title`
+    is injected from the news item (the prompt emits no title). A verdict of NO means
+    the caller should DROP this item and backfill from the bench — Layer 3 already
+    pre-filtered, this is the stricter final 'would RPSC set an MCQ?' gate."""
     sysmsg = SYS_EN if lang == "EN" else SYS_HI
-    hint = f"\nStatic chapter hint: {item.get('static_connect')}." if item.get("static_connect") else ""
-    examh = f"\nRPSC has tested this topic before ({item['exam_ref']})." if item.get("exam_ref") else ""
     lang_word = "English" if lang == "EN" else "Hindi (Devanagari, freshly authored, not translated)"
-    user = (f"Source ({item['source']}): {item['text']}\n"
-            f"Category: {item.get('category')}.{hint}{examh}\n\n"
-            f"Write in {lang_word}. Return ONLY JSON:\n"
-            '{"title": "max 10 words, no ** markers", '
-            '"summary": "1 line — what happened + one key testable fact only", '
-            '"context": "1-2 lines — ONLY directly testable background; else \\"details awaited\\"", '
-            '"bullets": ["MAXIMUM 4 bullets; each bullet = exactly ONE testable fact '
-            '(name/number/date/place/policy/scheme/appointment/record); '
-            'wrap every key name/number/place in **double asterisks** '
-            'e.g. \\"**NFHS-6** found **101** indicators in **Rajasthan**\\"; '
-            'NO personal/family/human-interest content, NO quotes, NO opinion"], '
-            '"static_connect": "short chapter name only, max 4 words, e.g. \\"Indian River System\\" or '
-            '\\"Constitutional Amendment\\" — no sentences", '
-            '"rpsc_angle": "1 line — the SPECIFIC fact RPSC would test about this item"}')
-    data, _ = C.claude_json(sysmsg, user, max_tokens=1000)
+    user = (f"News item ({item['source']}): {item['text']}\n"
+            f"Category: {item.get('category')}.\n\n"
+            f"Apply STEP 1 (MCQ test). If YES/MAYBE, write the {lang_word} content per the matching "
+            f"TYPE format (EXACTLY 5 bullets, bullet 1 = the news fact, bullets 2-5 from your own "
+            f"knowledge). Return ONLY JSON:\n"
+            '{"verdict": "YES|MAYBE|NO", "reason": "one line", '
+            '"item_type": "main|also|null", "needs_verify": true, '
+            '"summary": "one line why in news today (null if verdict NO)", '
+            '"bullets": ["EXACTLY 5 bullets, max 15 words each, key facts wrapped in **double asterisks** '
+            '(null if verdict NO)"], '
+            '"rpsc_angle": "RPSC can ask: Q1: ...? / Q2: ...? / Q3: ...?  (null if verdict NO)"}')
+    data, _ = C.claude_json(sysmsg, user, max_tokens=1200)
     data["bullets"] = data.get("bullets") or []
     data["rpsc_angle"] = data.get("rpsc_angle") or ""
+    data["verdict"] = (data.get("verdict") or "YES").strip().upper()
+    data["needs_verify"] = bool(data.get("needs_verify"))
+    data["title"] = (item.get("title") or "").replace("**", "").strip()   # title from the news item
     return data
 
 def gen_also(item):
@@ -1556,33 +1780,47 @@ def main(news_date, label_date, dry_run=False):
     # Use curator-approved items if available, otherwise use original main_items
     items_to_generate = curator_result.get('approved_items', main_items)
 
-    for i, it in enumerate(items_to_generate[:5], 1):  # Only top 5 after curation
-        C.log(f"   • main {i}/{len(items_to_generate[:5])}: {it['category']} …")
+    # Author the top-5 mains. The STEP-1 verdict is a FINAL gate: if gen_main returns
+    # NO, drop the item and backfill from the bench so the brief still lands 5 strong
+    # mains. (Layer 3 already pre-filtered; this is the stricter "would RPSC set an MCQ?")
+    queue = list(items_to_generate[:5])
+    _chosen = {id(x) for x in queue}
+    bench = [b for b in also_items if id(b) not in _chosen]
+    bench_used, bi = set(), 0
+    while len(main_rows_inserted) < 5 and queue:
+        it = queue.pop(0)
+        C.log(f"   • main {len(main_rows_inserted) + 1}/5: {it.get('category')} …")
         en = gen_main(it, "EN")
+        if en["verdict"] == "NO":
+            C.log(f"     ⤫ author-gate dropped: {(it.get('title') or '')[:45]} — {en.get('reason', '')[:60]}")
+            if bi < len(bench):                       # backfill with the next bench item
+                nxt = bench[bi]; bi += 1
+                bench_used.add(id(nxt)); queue.append(nxt)
+            continue
         hi = gen_main(it, "HI")
+        needs_verify = bool(en.get("needs_verify") or hi.get("needs_verify"))
         base = dict(date=label_date.isoformat(), category=it["category"], tier=it["tier"],
                     source=it["source"], rajasthan_angle=it["rajasthan_angle"],
                     priority=it.get("final_priority_score", it.get("priority", 0.5)),
                     is_main=True, item_type="main",
+                    needs_verify=needs_verify,          # curator-verify flag (model unsure)
                     # shared EN/HI key so curator status changes stay in lockstep
                     group_key=_group_key(it),
                     # precomputed PYQ candidates (Mac) so PDF regen never loads torch
                     pyq=it.get("pyq_candidates"))
 
         row_en = {**base, "language": "EN", "title": en.get("title"), "summary": en.get("summary"),
-                  "context": en.get("context"), "bullets": en.get("bullets"),
-                  "static_connect": en.get("static_connect") or it.get("static_connect"),
-                  "rpsc_angle": en.get("rpsc_angle")}
+                  "bullets": en.get("bullets"), "rpsc_angle": en.get("rpsc_angle")}
         row_hi = {**base, "language": "HI", "title": hi.get("title"), "summary": hi.get("summary"),
-                  "context": hi.get("context"), "bullets": hi.get("bullets"),
-                  "static_connect": hi.get("static_connect") or it.get("static_connect"),
-                  "rpsc_angle": hi.get("rpsc_angle")}
+                  "bullets": hi.get("bullets"), "rpsc_angle": hi.get("rpsc_angle")}
         ins = C.sb_insert("daily_ca_items", [row_en, row_hi])
         # keep the EN row id as canonical "source item" for MCQs
         en_id = next((r["id"] for r in ins if r["language"] == "EN"), ins[0]["id"])
-        main_rows_inserted.append({"id": en_id, "category": it["category"], "title": en.get("title")})
+        main_rows_inserted.append({"id": en_id, "category": it["category"],
+                                   "title": en.get("title"), "needs_verify": needs_verify})
 
-    for j, it in enumerate(also_items, 1):
+    # Bench items promoted into mains (backfill) must NOT also appear in also-in-news.
+    for j, it in enumerate([a for a in also_items if id(a) not in bench_used], 1):
         C.log(f"   • also {j}/{len(also_items)}: {it['category']} …")
         a = gen_also(it)
         base = dict(date=label_date.isoformat(), category=it["category"], tier=it["tier"],

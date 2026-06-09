@@ -224,7 +224,7 @@
                             <div class="item-body">
                                 <div class="field-row">
                                     <div style="flex:1">
-                                        <div class="item-title-text" id="title-text-{{ iid }}">{{ title }}</div>
+                                        <div class="item-title-text" id="title-text-{{ iid }}">{{ title }}{% if item.needs_verify %} <span title="Model was not 100% sure of a number/date/name — check before publishing" style="background:#fde68a;color:#92400e;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;margin-left:6px;vertical-align:middle;white-space:nowrap;">⚠ VERIFY</span>{% endif %}</div>
                                         <textarea class="edit-input title-input" id="title-edit-{{ iid }}"
                                                   name="title_edit_{{ iid }}" rows="2" style="display:none">{{ title }}</textarea>
                                     </div>
