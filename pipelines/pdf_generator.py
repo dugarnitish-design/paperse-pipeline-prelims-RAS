@@ -100,17 +100,6 @@ li b, li strong {{ color:#000000; font-weight:700; }}
 .also li {{ font-size:12.5px; margin-bottom:3px; color:#374151; }}
 .also .t {{ font-weight:700; color:#1a1a1a; }}
 
-.pyqbox {{ background:#f3f4f6; border:1px solid #e5e7eb; border-radius:8px; padding:7px 10px; }}
-.pyqitem {{ margin:1px 0 4px; }}
-.pyqfrom {{ font-size:8.5px; font-weight:700; color:#f4622a; text-transform:uppercase;
-            letter-spacing:.03em; margin-bottom:2px; }}
-.pyqq {{ font-size:12.5px; font-weight:700; color:#11203a; margin-bottom:3px; }}
-.pyqopt {{ font-size:12px; margin:0 0 0 6px; color:#374151; }}
-.pyqans {{ font-size:12px; margin-top:3px; font-weight:700; color:#15803d; }}
-.yearbadge {{ float:right; background:#11203a; color:#ffffff; font-size:8.5px; font-weight:700;
-              padding:2px 9px; border-radius:10px; margin-left:8px; }}
-.pyqsrc {{ font-size:8.3px; color:#6b7280; margin-top:2px; }}
-.pyqdiv {{ border:none; border-top:1px solid #e5e7eb; margin:5px 0; }}
 
 .cta {{ margin-top:8px; padding:7px 11px; background:#fff7ed; border:1px solid #fed7aa;
         border-radius:8px; font-size:12px; }}
@@ -245,42 +234,9 @@ def find_linked_pyqs(en_items, candidate_max_distance=0.70, candidate_n=3, per_a
                 kept += 1
     return out   # already in news order (outer loop is item order)
 
-def render_pyq_section(linked_pyqs, lang, main_items, L):
-    """Render the 'PYQs Linked to Today's News' block. Empty string if no matches.
-    Each Q is in a light-grey box with a year badge floated to the right."""
-    if not linked_pyqs:
-        return ""
-    is_hi = (lang == "HI")
-    blocks = []
-    for k, lp in enumerate(linked_pyqs):
-        idx = lp["item_idx"]
-        headline = ""
-        if 0 <= idx < len(main_items):
-            headline = str(main_items[idx].get("title") or "").replace("**", "")
-        q = lp["pyq"]
-        qtext = (q.get("question_hi") if is_hi and q.get("question_hi") else q.get("question")) or ""
-        corr_let = NUM2LET.get(str(q.get("correct_ans") or "").strip(), "")
-        opt_html, corr_text = "", ""
-        for n in ("1", "2", "3", "4"):
-            txt = (q.get(f"option_{n}_hi") if is_hi and q.get(f"option_{n}_hi") else q.get(f"option_{n}"))
-            if not txt:
-                continue
-            let = NUM2LET[n]
-            is_corr = (let == corr_let)
-            if is_corr:
-                corr_text = txt
-            mark = " &#10003;" if is_corr else ""        # ✓ green check
-            style = "color:#15803d; font-weight:700;" if is_corr else ""
-            opt_html += f'<div class="pyqopt" style="{style}">({let}) {esc(txt)}{mark}</div>'
-        year_badge = f'<span class="yearbadge">RPSC RAS {esc(q.get("year"))}</span>'
-        from_html = f'<div class="pyqfrom">{L["from"]}: {esc(headline)}</div>' if headline else ""
-        ans_html = f'<div class="pyqans">{L["answer"]}: ({corr_let}) {esc(corr_text)}</div>'
-        div = "" if k == len(linked_pyqs) - 1 else '<hr class="pyqdiv">'
-        blocks.append(
-            f'<div class="pyqitem">{year_badge}{from_html}'
-            f'<div class="pyqq">{esc(qtext)}</div>{opt_html}{ans_html}</div>{div}')
-    return (f'<div class="sec"><h2>{L["pyq_head"]}</h2>'
-            f'<div class="pyqbox">{"".join(blocks)}</div></div>')
+# NOTE: PYQs are delivered ONLY as separate Telegram polls (pyq_poll_bot.py) — they are
+# no longer rendered in the PDF, so the old render_pyq_section() has been removed.
+# find_linked_pyqs() above is retained because pyq_poll_bot imports it for the polls.
 
 def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
     ds = date.isoformat()
@@ -319,8 +275,8 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
         also_html = f"<div class='also'><h2>{L['also']}</h2><ul>{lis}</ul></div>"
 
     # FIX 3: the "Static connects today" summary line is removed (internal metadata).
-
-    pyq_html = render_pyq_section(linked_pyqs or [], lang, main_items, L)
+    # PYQs are NOT in the PDF — they are delivered only as separate Telegram polls
+    # (pyq_poll_bot.py). The PDF = CA items + test link + footer.
 
     social = " ".join(f"<a href='{u}'>{esc(t)}</a>" for t, u in SOCIAL)
     body_cls = "hi" if lang == "HI" else "en"
@@ -332,7 +288,6 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
      <div class="sub">{L['sub']}</div></div>
   {''.join(items_html) if items_html else f"<p>{L['none']}</p>"}
   {also_html}
-  {pyq_html}
   <div class="cta"><b>{L['test']}</b> &nbsp;
      <a href="{TEST_URL.format(date=ds)}">paperse.in/test/{ds}</a><br>
      {L['test_sub']}</div>
@@ -395,14 +350,10 @@ def main(date):
     C.log("=" * 64)
     # Compute PYQ matches once from EN main items; both PDFs share them
     # (EN & HI main items align by index — both ordered priority.desc).
-    ds = date.isoformat()
-    en_main = C.sb_select("daily_ca_items", params={
-        "date": f"eq.{ds}", "is_main": "eq.true", "language": "eq.EN", "order": "priority.desc"})
-    en_main = [r for r in en_main if r.get("status") != "rejected"]   # FIX 6: never link PYQs off rejected items
-    linked_pyqs = find_linked_pyqs(en_main)[:2]   # cap PYQ-of-the-Day at 2 (2-page target)
-    C.log(f"   → {len(linked_pyqs)} PYQ(s) linked to today's news")
-    en = build_pdf(date, "EN", linked_pyqs)
-    hi = build_pdf(date, "HI", linked_pyqs)
+    # PYQs are delivered ONLY as separate Telegram polls (pyq_poll_bot.py), never in the
+    # PDF. The PDF = CA items (main + also-in-news) + test link + footer.
+    en = build_pdf(date, "EN")
+    hi = build_pdf(date, "HI")
     if en or hi:
         C.log(f"\n✓ STEP 4 complete — EN={'ok' if en else 'skip'} · HI={'ok' if hi else 'skip'}")
         return [p for p in (en, hi) if p]
