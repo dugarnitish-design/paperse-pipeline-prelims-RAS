@@ -15,30 +15,26 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from pipelines import _common as C
 
 
-def build_caption(label_date, main_items):
-    """Build Telegram caption with headline, top 5 items, and test URL.
+def build_caption(label_date, main_items, lang="EN"):
+    """Build the Telegram caption (headline + top-5 titles + test URL) in `lang`.
 
-    Args:
-        label_date: datetime.date object
-        main_items: list of dicts with 'title' and 'category' fields
-
-    Returns:
-        Formatted caption string
+    `main_items` must be the rows for THAT language — so the EN PDF gets English
+    titles and the HI PDF gets Hindi titles (Bug 1: the HI caption was reusing the
+    English titles). Args: label_date (date), main_items (rows with title/category).
     """
-    # Date header
     date_str = label_date.strftime("%d %B %Y")
-    caption = f"📰 Current Affairs — {date_str}\n\n"
+    test_url = f"paperse.in/test/{label_date.isoformat()}"
+    if lang == "HI":
+        caption = f"📰 करेंट अफेयर्स — {date_str}\n\n"
+    else:
+        caption = f"📰 Current Affairs — {date_str}\n\n"
 
-    # Top 5 main items with emojis
     for item in main_items[:5]:
         emoji = C.emoji_for(item.get("category", ""))
-        title = item.get("title", "").strip()
+        title = (item.get("title") or "").replace("**", "").strip()
         caption += f"{emoji} {title}\n"
 
-    # Test URL
-    test_url = f"paperse.in/test/{label_date.isoformat()}"
-    caption += f"\n📖 Complete analysis: {test_url}"
-
+    caption += ("\n📖 पूर्ण विश्लेषण: " if lang == "HI" else "\n📖 Complete analysis: ") + test_url
     return caption
 
 
@@ -80,16 +76,32 @@ def post_to_telegram(label_date, dry_run=False):
         C.log(f"   ⚠ No main items found for {label_date.isoformat()}")
         return False
 
-    # Build caption
-    caption = build_caption(label_date, main_items)
+    # HI rows (same stories, Hindi titles) for the Hindi PDF caption (Bug 1).
+    try:
+        main_items_hi = C.sb_select("daily_ca_items",
+                                    params={
+                                        "date": f"eq.{label_date.isoformat()}",
+                                        "is_main": "eq.true",
+                                        "language": "eq.HI",
+                                        "order": "priority.desc",
+                                        "limit": 5
+                                    }) or []
+    except Exception as e:
+        C.log(f"   ⚠ Failed to fetch HI main items (HI caption will fall back to EN): {e}")
+        main_items_hi = []
 
-    # DRY RUN: just show caption
+    # Build captions — English titles for the EN PDF, Hindi titles for the HI PDF.
+    caption = build_caption(label_date, main_items, lang="EN")
+    caption_hi = build_caption(label_date, main_items_hi or main_items,
+                               lang="HI" if main_items_hi else "EN")
+
+    # DRY RUN: just show captions
     if dry_run:
         C.log(f"\n   ─── DRY RUN: Would post to Telegram ───")
         C.log(f"\n   EN PDF caption:")
         C.log(caption)
         C.log(f"\n   HI PDF caption:")
-        C.log(caption)
+        C.log(caption_hi)
         C.log(f"\n   ─────────────────────────────────────\n")
         return True
 
@@ -127,13 +139,13 @@ def post_to_telegram(label_date, dry_run=False):
                 return False
         C.log(f"   ✓ EN PDF posted")
 
-        # Post HI PDF with same caption
+        # Post HI PDF with the HINDI caption (Bug 1: was reusing the English caption)
         C.log(f"   Posting HI PDF to Telegram...")
         with open(hi_pdf, "rb") as f:
             files = {"document": f}
             data = {
                 "chat_id": channel_id,
-                "caption": caption,
+                "caption": caption_hi,
                 "parse_mode": "Markdown"
             }
             response = requests.post(api_url, files=files, data=data, timeout=30)

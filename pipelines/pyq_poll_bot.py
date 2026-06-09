@@ -191,15 +191,35 @@ def _fit_explanation(correct_text, year, expl):
         return f"{head}\n\n{_trunc(expl, avail2)}"
     return f"{head}\n\n{_trunc(expl, avail)}\n\n{CTA_URL}"
 
-def format_poll(pyq):
-    """Return {question, options, correct_option_id, explanation} for sendPoll."""
-    idx, opts = _correct_index(pyq)
+def _lang_field(pyq, base, lang):
+    """Value of `base` in `lang`; HI falls back to EN per-field when the Hindi
+    column is empty (so a poll still posts even if a PYQ lacks a translation)."""
+    if lang == "HI":
+        return (pyq.get(base + "_hi") or pyq.get(base) or "")
+    return (pyq.get(base) or "")
+
+
+def format_poll(pyq, lang="EN", explanation=None):
+    """Return {question, options, correct_option_id, explanation} for sendPoll, in
+    `lang`. Pass `explanation` to reuse a previously-built one (so posting the SAME
+    PYQ in EN and HI costs only ONE Haiku explanation call)."""
+    ca = str(pyq.get("correct_ans") or "").strip()
+    opts, correct = [], None
+    for i in ("1", "2", "3", "4"):
+        o = _lang_field(pyq, f"option_{i}", lang).strip()
+        if not o:
+            continue
+        if ca == i:
+            correct = len(opts)
+        opts.append(_trunc(o, OPT_MAX))
+    if explanation is None:
+        explanation = _fit_explanation(_correct_text(pyq), pyq.get("year"),
+                                        _haiku_explanation(pyq, _correct_text(pyq)))
     return {
-        "question": _trunc(pyq.get("question"), Q_MAX),
-        "options": [_trunc(o, OPT_MAX) for o in opts],
-        "correct_option_id": idx,
-        "explanation": _fit_explanation(_correct_text(pyq), pyq.get("year"),
-                                        _haiku_explanation(pyq, _correct_text(pyq))),
+        "question": _trunc(_lang_field(pyq, "question", lang), Q_MAX),
+        "options": opts,
+        "correct_option_id": (correct if len(opts) >= 2 else None),
+        "explanation": explanation,
     }
 
 
@@ -212,13 +232,20 @@ def _tg(method, payload):
         raise RuntimeError(f"Telegram {method} failed: {json.dumps(data)[:300]}")
     return data["result"]
 
+# Bug 2/3 — two clearly-separated PYQ sections, each with its own fixed header:
+# an English block (all EN polls) followed by a Hindi block (all HI polls).
+SECTION_HEADER = {
+    "EN": "RPSC 📚 PYQ of the Day | High-Priority Revision Topic 🇬🇧",
+    "HI": "RPSC 📚 PYQ of the Day | उच्च-प्राथमिकता विषय 🇮🇳",
+}
+
 def header_text(selected):
     if selected["type"] == "relevant":
         return f"📚 PYQ of the Day\nRelated to: {selected['news_story_title']}"
     return "📚 PYQ of the Day\nHigh-priority revision topic"
 
-def post_header(selected):
-    return _tg("sendMessage", {"chat_id": CHANNEL, "text": header_text(selected),
+def post_section_header(lang):
+    return _tg("sendMessage", {"chat_id": CHANNEL, "text": SECTION_HEADER[lang],
                                "disable_notification": True})
 
 def post_quiz_poll(selected, poll=None):
@@ -245,17 +272,26 @@ def run_daily_pyq_polls(date_str, dry_run=False):
         C.log("   ⚠ no PYQs selected — nothing to post.")
         return []
 
+    # Build each PYQ once in EN + HI (one Haiku explanation, reused for the HI poll).
+    prepared = []
     for n, s in enumerate(selected, 1):
-        poll = format_poll(s["pyq"])
-        s["_poll"] = poll
-        if poll["correct_option_id"] is None:
+        en = format_poll(s["pyq"], "EN")
+        if en["correct_option_id"] is None:
             C.log(f"   ⚠ poll {n} skipped — unusable options (Q{s['pyq'].get('q_no')})")
             continue
-        if dry_run:
-            _print_preview(n, s, poll)
-            continue
-        post_header(s)
-        mid = post_quiz_poll(s, poll)
+        hi = format_poll(s["pyq"], "HI", explanation=en["explanation"])
+        prepared.append((s, en, hi))
+
+    if not prepared:
+        C.log("   ⚠ no usable PYQ polls — nothing to post.")
+        return []
+
+    if dry_run:
+        for n, (s, en, hi) in enumerate(prepared, 1):
+            _print_preview(n, s, en)
+        return selected
+
+    def _log(s, mid):
         try:
             C.sb_insert("pyq_polls", {
                 "date": date_str, "pyq_id": s["pyq"].get("id"),
@@ -263,7 +299,21 @@ def run_daily_pyq_polls(date_str, dry_run=False):
                 "type": s["type"], "poll_message_id": mid})
         except Exception as e:
             C.log(f"   ⚠ pyq_polls log failed: {e}")
-        C.log(f"   ✓ posted {s['type']} poll (message_id={mid})")
+
+    # ── Section 1: English ──────────────────────────────────────────────────
+    post_section_header("EN")
+    for s, en, hi in prepared:
+        mid = post_quiz_poll(s, en)
+        _log(s, mid)
+        C.log(f"   ✓ posted EN {s['type']} poll (message_id={mid})")
+
+    # ── Section 2: Hindi ────────────────────────────────────────────────────
+    post_section_header("HI")
+    for s, en, hi in prepared:
+        mid = post_quiz_poll(s, hi)
+        _log(s, mid)
+        C.log(f"   ✓ posted HI {s['type']} poll (message_id={mid})")
+
     return selected
 
 
