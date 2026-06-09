@@ -124,6 +124,15 @@ import re as _re
 def esc(s):
     return html.escape(str(s or ""))
 
+def _strip_news_fact(s):
+    """Remove a leading 'News fact:' label from a bullet — internal metadata that must
+    not show to students (belt-and-braces for rows authored before the prompt change).
+    Handles both 'News fact: **x**' and '**News fact:** x' without eating the fact's **."""
+    s = str(s or "")
+    s = _re.sub(r'^\s*\*\*\s*news\s*fact\s*:\s*\*\*\s*', '', s, flags=_re.I)   # **News fact:** x
+    s = _re.sub(r'^\s*news\s*fact\s*:\s*', '', s, flags=_re.I)                 # News fact: x
+    return s
+
 def md_bold(s):
     """Convert **text** markdown → <b>text</b> HTML (safe: escape first, then convert)."""
     return _re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', html.escape(str(s or "")))
@@ -281,7 +290,7 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
     for it in main_items:
         color = category_color(it.get("category"))
         # Bullets: **text** → <b>text</b> (key names/numbers/dates rendered bold black)
-        bullets = "".join(f"<li>{md_bold(b)}</li>" for b in (it.get("bullets") or []))
+        bullets = "".join(f"<li>{md_bold(_strip_news_fact(b))}</li>" for b in (it.get("bullets") or []))
 
         # RAG tags (from item attributes set during enrichment, or live topic_kb lookup)
         tags_html = _build_tag_html(it)
@@ -390,7 +399,7 @@ def main(date):
     en_main = C.sb_select("daily_ca_items", params={
         "date": f"eq.{ds}", "is_main": "eq.true", "language": "eq.EN", "order": "priority.desc"})
     en_main = [r for r in en_main if r.get("status") != "rejected"]   # FIX 6: never link PYQs off rejected items
-    linked_pyqs = find_linked_pyqs(en_main)
+    linked_pyqs = find_linked_pyqs(en_main)[:2]   # cap PYQ-of-the-Day at 2 (2-page target)
     C.log(f"   → {len(linked_pyqs)} PYQ(s) linked to today's news")
     en = build_pdf(date, "EN", linked_pyqs)
     hi = build_pdf(date, "HI", linked_pyqs)

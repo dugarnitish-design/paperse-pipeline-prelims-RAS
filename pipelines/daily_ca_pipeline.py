@@ -1232,15 +1232,18 @@ DETECT the news type and follow the bullet format:
 TYPE 1 — SCHEME or POLICY (MGNREGS, PMSMA, PM schemes, state schemes, government programmes, missions)
 summary: one line why in news today
 bullets:
-- News fact: **specific testable fact from this news (last/first state, new target, revised amount, milestone)**
+- **the single most testable STABLE scheme fact (full name / launch year / key provision)**
 - Full name: **complete official scheme name**
 - Launched: **year** under **Act or Policy**
 - Ministry: **implementing ministry**
 - Key number: **days/amount/target/percentage**
+RPSC Angle (TYPE 1): ask ONLY stable scheme facts — full name, launch year, ministry,
+coverage amount, key provision. NEVER ask which state joined/resumed, recent
+implementation updates, or how long it was suspended.
 
 TYPE 2 — APPOINTMENT or AWARD (Constitutional posts, statutory bodies, national awards, Padma, Khel Ratna)
 bullets:
-- News fact: **person + exact post/award from this news**
+- **person + exact post/award from this news**
 - Body: **constitutional/statutory body**
 - Appointed by: **President/PM/collegium**
 - Notable: **first/youngest/replaced whom/term**
@@ -1248,7 +1251,7 @@ bullets:
 
 TYPE 3 — WILDLIFE or ENVIRONMENT (Tiger reserves, national parks, Ramsar, biosphere reserves, wildlife census)
 bullets:
-- News fact: **new designation/census number/record from this news**
+- **new designation/census number/record from this news**
 - Reserve/Site: **full official name**
 - Location: **state**, district if known
 - Species: **animal/plant/bird involved**
@@ -1256,7 +1259,7 @@ bullets:
 
 TYPE 4 — INTERNATIONAL or DIPLOMACY (MoUs, treaties, bilateral agreements, India rank in global indices, UN reports)
 bullets:
-- News fact: **specific agreement/rank/outcome from this news**
+- **specific agreement/rank/outcome from this news**
 - Agreement/Report: **exact name**
 - Between: **India** and **country/organisation**
 - India's rank/benefit: **rank or benefit**
@@ -1264,7 +1267,7 @@ bullets:
 
 TYPE 5 — SCIENCE or TECHNOLOGY (ISRO missions, DRDO weapons, CSIR research, space, defence, AI policy, discoveries)
 bullets:
-- News fact: **specific achievement/milestone/record from this news**
+- **specific achievement/milestone/record from this news**
 - Organisation: **ISRO/DRDO/CSIR/other**
 - Achievement: **mission/weapon/tech full name**
 - Key number: **range/capacity/altitude/date**
@@ -1272,7 +1275,7 @@ bullets:
 
 TYPE 6 — SPORTS or AWARDS (Tournament wins, medals, records, national awards, Nobel, Booker, Sahitya)
 bullets:
-- News fact: **winner + award/tournament + edition from this news**
+- **winner + award/tournament + edition from this news**
 - Winner full name: **name** — **state/country**
 - Defeated/Beat: **opponent or record broken**
 - Awarded by: **body that gives this award**
@@ -1280,7 +1283,7 @@ bullets:
 
 TYPE 7 — RAJASTHAN SPECIFIC (Rajasthan schemes, geography, districts, culture, heritage, state decisions, economy)
 bullets:
-- News fact: **specific Rajasthan fact from this news (rank/milestone/first/new provision)**
+- **specific Rajasthan fact from this news (rank/milestone/first/new provision)**
 - Name: **scheme/place/event full name**
 - Location: **district or region in Rajasthan**
 - Department: **state ministry/department**
@@ -1288,7 +1291,7 @@ bullets:
 
 TYPE 8 — CONSTITUTION/BILL/JUDGMENT (Bills passed, amendments, SC judgments, new laws, electoral reforms, RTI/RTE)
 bullets:
-- News fact: **specific provision/change/judgment from this news**
+- **specific provision/change/judgment from this news**
 - Name: **Bill/Amendment/Judgment exact name**
 - Article/Provision: **Article number**
 - What it does: one line what it changes
@@ -1296,7 +1299,7 @@ bullets:
 
 TYPE 9 — ECONOMY/FINANCE/RBI (GDP data, RBI decisions, repo rate, budget, economic indices, trade, inflation, SEBI)
 bullets:
-- News fact: **specific rate/rank/number/decision from this news**
+- **specific rate/rank/number/decision from this news**
 - Policy/Report/Rate: **exact name**
 - Implementing body: **RBI/Finance/NITI/SEBI**
 - Change: from **old** to **new** if applicable
@@ -1316,6 +1319,9 @@ STRICT RULES for all types:
 - Wrap every key testable fact in **double asterisks**
 - Each bullet maximum 15 words
 - rpsc_angle maximum 2 lines: "RPSC can ask: Q1: question? / Q2: question? / Q3: question?"
+  — EVERY rpsc_angle question must test a STABLE topic fact valid next year too (scheme
+  name/launch year/ministry/coverage/provision), NEVER a volatile news event (which
+  state joined/resumed, how many years suspended, this week's change).
 - NEVER mention political parties
 - NEVER use political framing of any kind
 - No padding, no repetition, no opinions
@@ -1527,6 +1533,8 @@ def gen_main(item, lang):
             '{"verdict": "YES|MAYBE|NO", "reason": "one line", '
             '"news_type": "the TYPE number 1-9 you used, or DEFAULT", '
             '"item_type": "main|also|null", "needs_verify": true, '
+            '"title": "headline for this item, max 10 words, in the SAME language as the '
+            'bullets, no ** markers (null if verdict NO)", '
             '"summary": "one line why in news today (null if verdict NO)", '
             '"bullets": ["EXACTLY 5 bullets, max 15 words each, key facts wrapped in **double asterisks** '
             '(null if verdict NO)"], '
@@ -1537,7 +1545,9 @@ def gen_main(item, lang):
     data["verdict"] = (data.get("verdict") or "YES").strip().upper()
     data["needs_verify"] = bool(data.get("needs_verify"))
     data["news_type"] = str(data.get("news_type") or "").strip().upper()   # "1".."9" or "DEFAULT"
-    data["title"] = (item.get("title") or "").replace("**", "").strip()   # title from the news item
+    # Language-aware title (HI authors a Hindi title) so the Hindi PDF + Telegram caption
+    # show Hindi headlines; fall back to the scraped headline only if the model omits it.
+    data["title"] = (data.get("title") or item.get("title") or "").replace("**", "").strip()
     return data
 
 # Slim system prompt for bench/also-in-news one-liners (cost-opt: ~80 tokens vs the
