@@ -733,6 +733,11 @@ def _publish(date_str: str) -> bool:
             record_content_rag(date_str)
         except Exception as e:
             C.log(f"  ⚠ content_rag update failed (non-fatal): {e}")
+        try:                              # generate MCQs from the FINAL curated set + notify
+            from pipelines import mcq_generator
+            mcq_generator.main(C.parse_date(date_str))
+        except Exception as e:
+            C.log(f"  ⚠ MCQ generation after publish failed (non-fatal): {e}")
         return True
     else:
         C.log(f"  ✗ Publish failed:\n{result.stderr[-300:]}")

@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """
-STEP 3 — MCQ generator. Runs after daily_ca_pipeline.py.
+MCQ generator — runs at PUBLISH time (curator_server._publish / curator_auto_publish),
+NOT in run_daily.sh, so it sees the final curated + published set.
 
   python3 pipelines/mcq_generator.py 2026-06-02
 
-Takes today's main items and generates 1-2 high-quality MCQs PER ITEM (capped at 8
-for the day) using an expert-RPSC-question-setter prompt with strict quality rules
-(no ministerial positions, no family/procedural trivia, plausible same-type
-distractors, RPSC 60/30/10 direct/negative/multi-statement pattern). Stores in
-daily_mcqs (FK source_item_id) and keeps the live-site columns populated.
+Builds the 5-8 most exam-relevant MCQs from the WHOLE day's content — top-5 main items
+(2 candidates each, PYQ-anchored, 60/30/10 type mix) + up to 5 also-in-news items (1 each,
+built on the bold testable fact). All candidates pass the same quality gate, are scored by
+topic-intelligence frequency/trend + Rajasthan angle + base priority, and selected with RPSC
+variety rules (≤2/category, ≥3 categories, ≥1 Rajasthan, ≥1 scheme/policy). Stores in
+daily_mcqs (FK source_item_id), keeps the live-site columns populated, and Telegrams the
+curator that MCQs are live.
 """
 import sys, re, datetime
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent))
@@ -150,13 +153,6 @@ def plan_types(total):
     return seq[:total] or ["DIRECT-FACTUAL"] * total
 
 
-def richness(item):
-    """1 or 2 MCQs per item based on how much testable content it has."""
-    bl = item.get("bullets") or []
-    body = len((item.get("context") or "")) + sum(len(b) for b in bl)
-    return 2 if (len(bl) >= 4 and body > 250) else 1
-
-
 def _news_text(item):
     """The news the MCQ must be drawn from. Prefer an explicit 'text' (test harness);
     else assemble from the authored title + summary + context + bullets."""
@@ -263,6 +259,151 @@ def gen_mcq(item, types):
     return [q for q in (qs or []) if isinstance(q, dict) and q.get("question")][:n]
 
 
+# ── also-in-news bench MCQs (1 each, built on the bold testable fact) ────────────
+def _extract_bold(s):
+    """The single most-testable fact a bench one-liner highlights: text inside the first
+    **...**; falls back to the whole one-liner."""
+    m = re.search(r"\*\*(.+?)\*\*", s or "")
+    return (m.group(1).strip() if m else (s or "").strip())
+
+
+def gen_mcq_also(item):
+    """Generate ONE direct fact-recall MCQ for an also-in-news bench item, anchored on the
+    single bold testable fact in its one-liner. Same SYS prompt + quality rules + PYQ
+    anchoring as main items. Returns a list of 0-1 question dicts."""
+    one = (item.get("one_liner") or item.get("summary") or "").strip()
+    if not one:
+        return []
+    fact = _extract_bold(one)
+    examples = _pyq_examples(item)
+    ex_block = ("\nReal RPSC questions on this topic (model the style, do NOT repeat):\n"
+                + "\n".join(f"- {e}" for e in examples) + "\n") if examples else ""
+    user = (f"Generate 1 MCQ testing this specific fact:\n{fact}\n\n"
+            f"Use this one-liner as context: {one}\n"
+            f"Category: {item.get('category')}\n"
+            f"{ex_block}"
+            "Direct fact-recall question only. It MUST test a STABLE testable fact for RPSC "
+            "(name / number / year / place / scheme / award), not today's event. Follow the "
+            "STRICT QUALITY RULES and the OUTPUT FORMAT exactly. Return ONLY the JSON object "
+            "with exactly one question.")
+    try:
+        data, _ = C.claude_json(SYS, user, max_tokens=700, model=C.HAIKU_MODEL, cache_system=True)
+        qs = (data or {}).get("questions") or ([data] if (data or {}).get("question") else [])
+        return [q for q in qs if isinstance(q, dict) and q.get("question")][:1]
+    except Exception as e:
+        C.log(f"   ⚠ also-MCQ gen failed for item {item.get('id')}: {e}")
+        return []
+
+
+# ── candidate scoring + RPSC variety selection ──────────────────────────────────
+def _topic_freq(item):
+    """topic_intelligence (rpsc_frequency, frequency_trend) for this item via the pipeline's
+    capture-keyword matcher. Lazy import (daily_ca_pipeline is heavy)."""
+    try:
+        from pipelines.daily_ca_pipeline import match_topic
+        ti, _cov = match_topic(f"{item.get('title','')} {item.get('summary') or ''}")
+        return ti
+    except Exception:
+        return None
+
+
+def _is_rajasthan(item, q):
+    blob = f"{item.get('category','')} {item.get('title','')} {q.get('question','')}".lower()
+    return "rajasthan" in blob
+
+
+def _is_scheme(item):
+    c = (item.get("category") or "").lower()
+    return any(k in c for k in ("scheme", "governance", "policy", "bills", "legislation"))
+
+
+def _mcq_score(cand, ti):
+    """Base = item's daily_ca_items priority; + topic-intelligence frequency/trend; + Rajasthan."""
+    item, q = cand["item"], cand["q"]
+    s = float(item.get("priority") or 0.0)
+    if ti:
+        f = ti.get("rpsc_frequency")
+        s += 0.3 if f == "HIGH" else 0.1 if f == "MEDIUM" else 0.0
+        if ti.get("frequency_trend") == "RISING":
+            s += 0.1
+    if _is_rajasthan(item, q):
+        s += 0.2
+    return round(s, 3)
+
+
+def _cat_of(c):
+    return c["item"].get("category") or "General"
+
+
+def _select_best(scored, lo=5, hi=8):
+    """Sort candidates by MCQ score, then apply RPSC variety rules (best-effort, limited by
+    the day's content): ≤2 per category, then ensure ≥1 Rajasthan, ≥1 scheme/policy and ≥3
+    distinct categories. Keep 5-8."""
+    ranked = sorted(scored, key=lambda c: -c["_score"])
+    chosen, per_cat, ids = [], {}, set()
+
+    def add(c):
+        chosen.append(c); ids.add(id(c)); per_cat[_cat_of(c)] = per_cat.get(_cat_of(c), 0) + 1
+
+    def drop(c):
+        chosen.remove(c); ids.discard(id(c)); per_cat[_cat_of(c)] -= 1
+
+    def pool():
+        return [c for c in ranked if id(c) not in ids]
+
+    def swap_in(cand):
+        # replace the lowest-scored chosen item whose category still has another rep,
+        # so injecting a required item never drops a unique category.
+        for c in sorted(chosen, key=lambda x: x["_score"]):
+            if per_cat.get(_cat_of(c), 0) > 1:
+                drop(c); add(cand); return True
+        return False
+
+    for c in ranked:                                   # greedy, ≤2 per category
+        if len(chosen) >= hi:
+            break
+        if per_cat.get(_cat_of(c), 0) >= 2:
+            continue
+        add(c)
+
+    if not any(_is_rajasthan(c["item"], c["q"]) for c in chosen):   # ≥1 Rajasthan
+        cand = next((c for c in pool() if _is_rajasthan(c["item"], c["q"])), None)
+        if cand:
+            swap_in(cand)
+    if not any(_is_scheme(c["item"]) for c in chosen):              # ≥1 scheme/policy
+        cand = next((c for c in pool() if _is_scheme(c["item"])), None)
+        if cand:
+            swap_in(cand)
+    if len({_cat_of(c) for c in chosen}) < 3:                       # ≥3 categories
+        for cand in pool():
+            if _cat_of(cand) in {_cat_of(c) for c in chosen}:
+                continue
+            if swap_in(cand) and len({_cat_of(c) for c in chosen}) >= 3:
+                break
+
+    if len(chosen) < lo:                               # top up (relax cap as last resort)
+        for c in pool():
+            if len(chosen) >= lo:
+                break
+            add(c)
+    return chosen[:hi]
+
+
+def _notify_mcqs_live(ds, n_q, n_topics):
+    """Telegram the curator once MCQs are live for the day."""
+    token, chat = C.ENV.get("TELEGRAM_BOT_TOKEN"), C.ENV.get("CURATOR_CHAT_ID")
+    if not (token and chat):
+        return
+    msg = (f"✅ MCQs live for {ds}:\n{n_q} questions across {n_topics} topics\n"
+           f"paperse.in/test/{ds}")
+    try:
+        import requests
+        requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                      json={"chat_id": chat, "text": msg, "disable_web_page_preview": True}, timeout=15)
+    except Exception as e:
+        C.log(f"   ⚠ MCQ live-notify failed: {e}")
+
+
 def _to_row(q, item, ds, q_no, planned_type=None):
     """Map a new-format question dict → daily_mcqs row, or None if malformed.
     planned_type (the steered type) is authoritative; fall back to the model's
@@ -354,111 +495,85 @@ def _qkey(q):
     return re.sub(r"\W+", " ", (q.get("question") or "").lower()).strip()
 
 
-def _generate_candidates(items, alloc, type_seq, total):
-    """Per-item generation (FIX C): one Haiku call per item, 1-2 type-steered MCQs each.
-    Returns candidate dicts {q, item, type}."""
-    cands, ti = [], 0
-    for it, n in zip(items, alloc):
-        if ti >= total:
-            break
-        n = min(n, total - ti)
-        types = type_seq[ti:ti + n]
-        ti += n
+def main(date):
+    """Build the 5-8 most exam-relevant MCQs from the WHOLE day's content (top-5 mains +
+    up to 5 also-in-news), scored by topic-intelligence + Rajasthan + base priority, and
+    selected with RPSC variety rules. Runs at PUBLISH time (curator_server._publish /
+    curator_auto_publish), so it sees the final curated+published set."""
+    ds = date.isoformat()
+    C.log("=" * 64); C.log(f"MCQ Generator — {ds}  (publish-time)"); C.log("=" * 64)
+
+    main_items = C.sb_select("daily_ca_items", params={
+        "date": f"eq.{ds}", "is_main": "eq.true", "language": "eq.EN", "order": "id"}) or []
+    also_items = C.sb_select("daily_ca_items", params={
+        "date": f"eq.{ds}", "is_main": "eq.false", "language": "eq.EN", "order": "priority.desc"}) or []
+    also_items = [a for a in also_items if (a.get("status") or "") != "rejected"][:5]
+    if not main_items and not also_items:
+        C.log("✗ No items found for this date.")
+        return None
+    C.log(f"   {len(main_items)} main + {len(also_items)} also-in-news items")
+
+    # STEP 1 — candidates: 2 per main item (type-steered 60/30/10, PYQ-anchored) + 1 per
+    # also-in-news item (built on its bold testable fact). ~15 candidates.
+    type_seq = plan_types(2 * max(1, len(main_items)))
+    cands, ti_idx, seen = [], 0, set()
+    for it in main_items:
+        types = type_seq[ti_idx:ti_idx + 2] or ["DIRECT-FACTUAL"]; ti_idx += 2
         try:
             qs = gen_mcq(it, types)
         except Exception as e:
-            C.log(f"   ⚠ MCQ gen failed for item {it.get('id')}: {e}")
-            continue
+            C.log(f"   ⚠ main MCQ gen failed for item {it.get('id')}: {e}"); qs = []
         for k, q in enumerate(qs):
-            cands.append({"q": q, "item": it, "type": types[k] if k < len(types) else None})
-    return cands
+            key = _qkey(q)
+            if key and key not in seen:
+                seen.add(key)
+                cands.append({"q": q, "item": it, "type": types[k] if k < len(types) else None})
+    for it in also_items:
+        for q in gen_mcq_also(it):
+            key = _qkey(q)
+            if key and key not in seen:
+                seen.add(key)
+                cands.append({"q": q, "item": it, "type": "DIRECT-FACTUAL"})
+    C.log(f"   {len(cands)} candidate MCQs generated")
 
-
-def _select_spread(cands, cap=8, max_per_item=2):
-    """FIX C: keep ≤max_per_item per source item, cap total; preserve order."""
-    out, per = [], {}
-    for c in cands:
-        iid = c["item"].get("id")
-        if per.get(iid, 0) >= max_per_item:
-            continue
-        out.append(c)
-        per[iid] = per.get(iid, 0) + 1
-        if len(out) >= cap:
-            break
-    return out
-
-
-def main(date):
-    ds = date.isoformat()
-    C.log("=" * 64)
-    C.log(f"STEP 3 — MCQ Generator — {ds}")
-    C.log("=" * 64)
-
-    items = C.sb_select("daily_ca_items", params={
-        "date": f"eq.{ds}", "is_main": "eq.true", "language": "eq.EN", "order": "id"})
-    if not items:
-        C.log("✗ No main items found for this date. Run daily_ca_pipeline.py first.")
-        return None
-    C.log(f"   {len(items)} main items today")
-
-    # 1-2 MCQs per item (by richness), capped at 8 for the day.
-    alloc = [richness(it) for it in items]
-    cap = 8
-    while sum(alloc) > cap:                  # trim the richest first until under cap
-        i = max(range(len(alloc)), key=lambda k: alloc[k])
-        if alloc[i] <= 1:
-            break
-        alloc[i] -= 1
-    total = min(sum(alloc), cap)
-    # Plan the day's RPSC 60/30/10 type mix, then hand each item its slice of types.
-    type_seq = plan_types(total)
-    C.log(f"   Generating up to {total} MCQs · type plan: "
-          f"{ {t: type_seq.count(t) for t in TYPES} }")
-
-    # Generate (per item) → quality-gate → regenerate if <3 survive (max 2 extra
-    # attempts) → spread (≤2/item, cap 8). FIX B + C.
-    kept, seen = [], set()
-    for attempt in range(3):                       # 1 initial + up to 2 regenerations
-        cands = _generate_candidates(items, alloc, type_seq, total)
-        cands = [c for c in cands if _qkey(c["q"]) and _qkey(c["q"]) not in seen]
-        for c in cands:
-            seen.add(_qkey(c["q"]))
-        passed = _gate_keep(cands)
-        C.log(f"   gate attempt {attempt + 1}: {len(cands)} generated → {len(passed)} kept")
-        kept.extend(passed)
-        if len(kept) >= 3:
-            break
-        if attempt < 2:
-            C.log(f"   ↻ only {len(kept)} quality MCQs — regenerating…")
-
-    final = _select_spread(kept, cap=cap, max_per_item=2)
-    if not final:
+    # quality gate (one batch) — same gate for main + also
+    passed = _gate_keep(cands)
+    C.log(f"   quality gate: {len(cands)} → {len(passed)} kept")
+    if not passed:
         C.log("✗ No MCQs passed the quality gate.")
         return None
-    items_covered = len({c['item'].get('id') for c in final})
-    if items_covered < 3:
-        C.log(f"   ⚠ only {items_covered} distinct news item(s) covered (target ≥3) — "
-              f"limited by available/quality items today")
 
-    C.sb_delete("daily_mcqs", {"date": ds})  # idempotent re-run for this date
+    # STEP 2 — score each passed candidate (topic-intelligence + Rajasthan + base priority)
+    ti_cache = {}
+    for c in passed:
+        iid = c["item"].get("id")
+        if iid not in ti_cache:
+            ti_cache[iid] = _topic_freq(c["item"])
+        c["_score"] = _mcq_score(c, ti_cache[iid])
+
+    # STEP 3 — select the best 5-8 with RPSC variety rules
+    final = _select_best(passed, lo=5, hi=8)
+    n_topics = len({(c["item"].get("category") or "General") for c in final})
+    C.log(f"   selected {len(final)} MCQs across {n_topics} categories")
+
+    # STEP 4 — save (idempotent: replace the date's MCQs), best-scored first
+    C.sb_delete("daily_mcqs", {"date": ds})
     rows, q_no = [], 1
-    for c in final:
+    for c in sorted(final, key=lambda x: -x["_score"]):
         row = _to_row(c["q"], c["item"], ds, q_no, planned_type=c.get("type"))
         if not row:
             continue
         rows.append(row)
-        C.log(f"      Q{q_no} [{row['question_type']} · d{row['difficulty']}] "
-              f"{(c['item'].get('category') or 'General')[:26]:26s} correct={row['correct']} "
-              f":: {str(row['question'])[:58]}")
+        C.log(f"      Q{q_no} [{row['question_type']}] score={c['_score']} "
+              f"{(c['item'].get('category') or 'General')[:24]:24s} :: {str(row['question'])[:54]}")
         q_no += 1
-
     if not rows:
         C.log("✗ No MCQs generated.")
         return None
     C.sb_insert("daily_mcqs", rows, returning=False)
     cnt = C.sb_count("daily_mcqs", {"date": f"eq.{ds}"})
-    C.log(f"\n✓ STEP 3 complete — {cnt} MCQs in daily_mcqs for {ds} "
-          f"(across {items_covered} news items)")
+    C.log(f"\n✓ MCQ generation complete — {cnt} MCQs across {n_topics} topics for {ds}")
+    _notify_mcqs_live(ds, cnt, n_topics)
     return cnt
 
 

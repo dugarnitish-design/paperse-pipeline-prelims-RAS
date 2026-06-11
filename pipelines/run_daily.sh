@@ -43,8 +43,9 @@ python3 pipelines/pib_scraper.py --date "$NEWS_DATE" --write-supabase >/dev/null
 echo; echo ">>> STEP 2: daily_ca_pipeline.py"
 python3 pipelines/daily_ca_pipeline.py "$DATE"
 
-echo; echo ">>> STEP 3: mcq_generator.py"
-python3 pipelines/mcq_generator.py "$DATE"
+# NOTE: MCQ generation moved to PUBLISH time (curator_server._publish /
+# curator_auto_publish), so MCQs are built from the final curated + published set
+# (post-edit/promote/reject) instead of the pre-curation draft. No STEP 3 here.
 
 echo; echo ">>> STEP 4: pdf_generator.py"
 python3 pipelines/pdf_generator.py "$DATE"

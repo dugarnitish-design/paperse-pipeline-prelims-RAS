@@ -108,6 +108,11 @@ def auto_publish(date_str: str) -> None:
         record_content_rag(date_str)
     except Exception as e:
         C.log(f"  ⚠ content_rag update failed (non-fatal): {e}")
+    try:                              # generate MCQs from the FINAL curated set + notify
+        from pipelines import mcq_generator
+        mcq_generator.main(C.parse_date(date_str))
+    except Exception as e:
+        C.log(f"  ⚠ MCQ generation after publish failed (non-fatal): {e}")
     try:
         from pipelines.pyq_poll_bot import run_daily_pyq_polls
         C.log(f"  → Posting PYQ polls for {date_str} (after publish)")
