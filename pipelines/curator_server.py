@@ -118,6 +118,63 @@ def _fetch_items(date: str, is_main: bool, limit: int = 5) -> list:
         return []
 
 
+_CATEGORIES_CACHE = None
+
+
+def _categories():
+    """§9 — the 17 valid categories for the per-item dropdown (cached). DB-driven so a
+    new category in ca_categories shows up automatically; hardcoded fallback if the
+    table read fails."""
+    global _CATEGORIES_CACHE
+    if _CATEGORIES_CACHE is None:
+        try:
+            rows = C.sb_select("ca_categories", select="category", params={"limit": "200"}) or []
+            _CATEGORIES_CACHE = sorted({(r.get("category") or "").strip() for r in rows if r.get("category")})
+        except Exception:
+            _CATEGORIES_CACHE = []
+        if not _CATEGORIES_CACHE:
+            _CATEGORIES_CACHE = [
+                "Bills & Legislation", "Books, Awards & Personalities", "Global Sports & Awards",
+                "Health & Population", "International Organisations & Reports",
+                "International Politics & Elections", "Monetary Policy & RBI",
+                "National Politics & Governance", "National Schemes & Governance",
+                "National Science & Technology", "National Sports & Awards",
+                "Rajasthan Art, Culture & Heritage", "Rajasthan Politics & Governance",
+                "Rajasthan Schemes & Programmes", "Rajasthan Sports & Awards",
+                "Wildlife & Environment", "World Economy & Trade"]
+    return _CATEGORIES_CACHE
+
+
+def _as_bullets(v):
+    """daily_ca_items.bullets may arrive as a jsonb list or a JSON string — normalise to
+    a plain list of strings for the template/edit flow."""
+    if isinstance(v, str):
+        try: v = json.loads(v)
+        except Exception: return [v] if v.strip() else []
+    return [str(b) for b in (v or [])]
+
+
+def _attach_detail(items):
+    """§9 — enrich each EN item with parsed bullets and its MCQs (by source_item_id) so
+    the dashboard can show the full preview students will get."""
+    if not items:
+        return items
+    ids = [str(it["id"]) for it in items if it.get("id") is not None]
+    mcq_by_item = {}
+    if ids:
+        try:
+            mcqs = C.sb_select("daily_mcqs", select="*", params={
+                "source_item_id": f"in.({','.join(ids)})", "order": "q_no.asc", "limit": "200"}) or []
+            for m in mcqs:
+                mcq_by_item.setdefault(str(m.get("source_item_id")), []).append(m)
+        except Exception as e:
+            C.log(f"  ⚠ mcq fetch failed: {e}")
+    for it in items:
+        it["bullets_list"] = _as_bullets(it.get("bullets"))
+        it["mcqs"] = mcq_by_item.get(str(it.get("id")), [])
+    return items
+
+
 @app.route("/curator/<date>", methods=["GET"])
 @require_auth
 def curator_dashboard(date):
@@ -125,13 +182,14 @@ def curator_dashboard(date):
     status = (draft or {}).get("status", "pending")
 
     # New flow: show the live TOP-5 (is_main) AND ALSO-IN-NEWS (5) side by side.
-    main_items = _fetch_items(date, is_main=True,  limit=5)
-    also_items = _fetch_items(date, is_main=False, limit=5)
+    main_items = _attach_detail(_fetch_items(date, is_main=True,  limit=5))
+    also_items = _fetch_items(date, is_main=False, limit=5)   # bench = one-liners, no full preview
 
     if not main_items and not also_items:
         return render_template(
             "dashboard.html",
             date=date, main_items=[], also_items=[], draft_status=status,
+            categories=_categories(),
             error=f"No items found for {date}. Did the pipeline run?",
         ), 404
 
@@ -141,8 +199,122 @@ def curator_dashboard(date):
         main_items=main_items,
         also_items=also_items,
         draft_status=status,
+        categories=_categories(),
         error=None,
     )
+
+
+# ── §9 per-item edit / category / depth / MCQ endpoints ───────────────────────
+
+def _item_row(date, iid):
+    rows = C.sb_select("daily_ca_items", select="*", params={
+        "id": f"eq.{iid}", "date": f"eq.{date}", "language": "eq.EN", "limit": "1"})
+    return rows[0] if rows else None
+
+
+@app.route("/curator/<date>/item/<int:iid>/edit", methods=["POST"])
+@require_auth
+def edit_item(date, iid):
+    """§9 inline edit — persist title / hook(summary) / bullets / rpsc_angle to the EN row
+    (the curated PDF + channel + website read these). content_rag is written at publish
+    (record_content_rag) with the original-vs-final diff, so edits flow into RAG then."""
+    data = request.get_json(silent=True) or {}
+    patch = {}
+    if "title" in data:      patch["title"]      = (data.get("title") or "").replace("**", "").strip()
+    if "summary" in data:    patch["summary"]    = (data.get("summary") or "").strip()
+    if "rpsc_angle" in data: patch["rpsc_angle"] = (data.get("rpsc_angle") or "").strip()
+    if "bullets" in data:
+        patch["bullets"] = [str(b).strip() for b in (data.get("bullets") or []) if str(b).strip()]
+    if not patch:
+        return jsonify({"error": "nothing to update"}), 400
+    try:
+        C.sb_update("daily_ca_items", patch, {"id": str(iid)})
+        return jsonify({"ok": True, "updated": list(patch.keys())}), 200
+    except Exception as e:
+        C.log(f"  ⚠ edit_item {iid} failed: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/curator/<date>/item/<int:iid>/category", methods=["POST"])
+@require_auth
+def change_category(date, iid):
+    """§9 category change — update EN + HI rows (kept in sync via group_key)."""
+    data = request.get_json(silent=True) or {}
+    cat = (data.get("category") or "").strip()
+    if cat not in _categories():
+        return jsonify({"error": "unknown category"}), 400
+    it = _item_row(date, iid)
+    try:
+        C.sb_update("daily_ca_items", {"category": cat}, {"id": str(iid)})
+        gk = (it or {}).get("group_key")
+        if gk:
+            C.sb_update("daily_ca_items", {"category": cat},
+                        {"date": date, "language": "HI", "group_key": gk})
+        return jsonify({"ok": True, "category": cat}), 200
+    except Exception as e:
+        C.log(f"  ⚠ change_category {iid} failed: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/curator/<date>/item/<int:iid>/depth", methods=["POST"])
+@require_auth
+def change_depth(date, iid):
+    """§9 depth change — re-author EN (and HI) at the new depth. No original source text is
+    retained, so gen_main re-authors from title + hook + existing bullets (depth mainly
+    drives bullet count). Returns the new bullets + rpsc_angle for live display."""
+    data = request.get_json(silent=True) or {}
+    depth = (data.get("depth") or "").strip().lower()
+    if depth not in ("standard", "important", "landmark"):
+        return jsonify({"error": "bad depth"}), 400
+    it = _item_row(date, iid)
+    if not it:
+        return jsonify({"error": "item not found"}), 404
+    try:
+        from pipelines.daily_ca_pipeline import gen_main
+    except Exception as e:
+        return jsonify({"error": f"gen unavailable: {e}"}), 500
+
+    base_bullets = _as_bullets(it.get("bullets"))
+    src = {"source": it.get("source") or "news",
+           "text": f"{it.get('title','')}. {it.get('summary','')}\n" + "\n".join(base_bullets),
+           "category": it.get("category", "")}
+    out = {}
+    try:
+        en = gen_main(src, "EN", depth=depth)
+        new_bullets = en.get("bullets") or base_bullets
+        new_angle   = en.get("rpsc_angle") or it.get("rpsc_angle") or ""
+        C.sb_update("daily_ca_items",
+                    {"bullets": new_bullets, "rpsc_angle": new_angle, "depth": depth},
+                    {"id": str(iid)})
+        out = {"bullets": new_bullets, "rpsc_angle": new_angle, "depth": depth}
+        # keep HI in sync (best-effort)
+        gk = it.get("group_key")
+        if gk:
+            try:
+                hi = gen_main(src, "HI", depth=depth)
+                C.sb_update("daily_ca_items",
+                            {"bullets": hi.get("bullets") or new_bullets,
+                             "rpsc_angle": hi.get("rpsc_angle") or new_angle, "depth": depth},
+                            {"date": date, "language": "HI", "group_key": gk})
+            except Exception as e:
+                C.log(f"  ⚠ depth HI regen failed (non-fatal): {e}")
+        return jsonify({"ok": True, **out}), 200
+    except Exception as e:
+        C.log(f"  ⚠ change_depth {iid} failed: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/curator/<date>/mcq/<int:mid>/delete", methods=["POST"])
+@require_auth
+def delete_mcq(date, mid):
+    """§9 MCQ delete — students only ever see kept MCQs, so a curator-deleted MCQ is
+    removed from daily_mcqs. (Keep = no-op default; nothing to persist.)"""
+    try:
+        C.sb_delete("daily_mcqs", {"id": str(mid)})
+        return jsonify({"ok": True, "deleted": mid}), 200
+    except Exception as e:
+        C.log(f"  ⚠ delete_mcq {mid} failed: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/curator/<date>/reject", methods=["POST"])
