@@ -21,6 +21,22 @@ from pipelines import _common as C
 
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
+# §12 — map a topic_coverage.subject onto the six headline RPSC buckets for the
+# readiness breakdown. Rajasthan is checked first so "Rajasthan Economy/Polity/
+# History" all roll up under Rajasthan (the 40%-weight subject), per the spec.
+SUBJECT_BUCKETS = ["Rajasthan", "Economy", "Environment", "Polity", "History", "Science"]
+
+
+def _bucket(subject):
+    s = (subject or "").lower()
+    if "rajasthan" in s:                       return "Rajasthan"
+    if "environment" in s or "ecology" in s:   return "Environment"
+    if "econom" in s:                          return "Economy"
+    if "polit" in s or "constitution" in s:    return "Polity"
+    if "history" in s:                         return "History"
+    if "science" in s or "technolog" in s:     return "Science"
+    return None                                # outside the six headline buckets
+
 
 def _send_admin(text):
     token = C.ENV.get("TELEGRAM_BOT_TOKEN")
@@ -81,6 +97,17 @@ def main(today=None):
     def _lines(items, fmt, n=10):
         return "\n".join(fmt(c) for c in items[:n]) or "  —"
 
+    # §12 — per-subject readiness breakdown (HIGH topics covered this year ÷ total HIGH).
+    subj_lines = []
+    for b in SUBJECT_BUCKETS:
+        in_b = [c for c in high_total if _bucket(c.get("subject")) == b]
+        if not in_b:
+            continue
+        cov_b = [c for c in in_b if (c.get("days_since_covered") or 9999) <= 365]
+        pct = round(100 * len(cov_b) / len(in_b))
+        subj_lines.append(f"  {b}: {pct}% ({len(cov_b)}/{len(in_b)})")
+    subj_block = "\n".join(subj_lines) or "  —"
+
     msg = (
         f"📊 PAPERSE WEEKLY COVERAGE REPORT\nWeek of {today.isoformat()}\n\n"
         f"✅ COVERED THIS WEEK ({len(covered_week)}):\n"
@@ -91,7 +118,9 @@ def main(today=None):
         + _lines(overdue_high, lambda c: f"  • {c['topic'][:48]}", n=5) + "\n\n"
         f"📈 RPSC 2026 READINESS: {readiness}%\n"
         f"  HIGH covered this month: {len(high_covered_month)}/{len(high_total)}\n"
-        f"  HIGH covered this year:  {len(high_covered_year)}/{len(high_total)}"
+        f"  HIGH covered this year:  {len(high_covered_year)}/{len(high_total)}\n\n"
+        f"📚 SUBJECT-WISE READINESS (HIGH, this year):\n"
+        + subj_block
     )
     _send_admin(msg)
     C.log("\n" + msg)
