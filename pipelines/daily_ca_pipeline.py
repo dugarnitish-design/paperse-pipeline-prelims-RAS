@@ -1146,6 +1146,50 @@ def _intel_modifier(ti, low_text):
     return delta
 
 
+# FIX 2 — bench-quality penalty. Vague incident/process news (probes, conflicts, deaths,
+# protests, verdicts, resignations, "completes X years") rarely yields a testable RPSC
+# fact, so it should not win a bench slot over appointments/rankings/schemes/records.
+# Penalise -0.4 when one of these patterns is in the TITLE *unless India is the actor/
+# subject* of that news (India-as-subject incident news can still be testable).
+BAD_BENCH_PATTERNS = [
+    "investigate", "probe", "inquiry",
+    "conflict", "hostilities", "ceasefire",
+    "warhead", "missile attack", "airstrike",
+    "completes x years", "anniversary",
+    "condolence", "mourns", "passes away",
+    "protest", "agitation", "strike",
+    "verdict", "acquitted", "convicted",
+    "resigns", "steps down",
+]
+INDIA_SUBJECT_HINTS = (
+    "india", "indian", "bharat", "isro", "drdo", "rbi", "sebi", "niti aayog",
+    "modi", "centre", "parliament", "supreme court", "new delhi", "rajasthan",
+)
+
+
+def _bad_bench_penalty(title):
+    """-0.4 if the title is vague incident/process news AND India is not its subject;
+    0.0 otherwise. India is the subject when an India hint appears BEFORE the bad pattern
+    (i.e. India is performing the action), e.g. 'India investigates …' / 'Indian Navy …'.
+    'UN to probe …' (no India / India after) → penalised."""
+    t = (title or "").lower()
+    if not t:
+        return 0.0
+    for p in BAD_BENCH_PATTERNS:
+        if p == "completes x years":
+            m = re.search(r"complet\w*\s+\d+\s+year", t)
+            pos = m.start() if m else -1
+        else:
+            pos = t.find(p)
+        if pos < 0:
+            continue
+        hits = [t.find(h) for h in INDIA_SUBJECT_HINTS if h in t]
+        india_pos = min(hits) if hits else -1
+        india_is_subject = india_pos != -1 and india_pos < pos
+        return 0.0 if india_is_subject else -0.4
+    return 0.0
+
+
 def score_item(item, cats):
     """LAYER: category_keyword_filter — SCORE ONLY (not a hard gate).
 
@@ -1161,7 +1205,8 @@ def score_item(item, cats):
     _ti_row, _cov_row = match_topic(f"{item.get('title', '')} {low[:300]}")
     cov_delta = _coverage_modifier(_cov_row, low)
     intel_delta = _intel_modifier(_ti_row, low)
-    score_delta = cov_delta + intel_delta
+    bench_penalty = _bad_bench_penalty(item.get("title"))   # FIX 2 — vague incident news, India not subject
+    score_delta = cov_delta + intel_delta + bench_penalty
 
     best, best_score, best_core = None, 0, 0
     for c in cats:
@@ -1213,6 +1258,7 @@ def score_item(item, cats):
             "match_score": best_score, "match_core": best_core,
             "text_quality": round(quality, 2), "intent_mult": intent_mult,
             "coverage_delta": cov_delta, "intel_delta": intel_delta,
+            "bench_penalty": bench_penalty,
         })
     else:
         # FIX 1 — no category matched. A flat 0.2 made every uncategorised item tie.
@@ -1228,6 +1274,7 @@ def score_item(item, cats):
             "priority": round(base * quality + score_delta, 3), "match_score": 0, "match_core": 0,
             "text_quality": round(quality, 2), "intent_mult": 1.0,
             "coverage_delta": cov_delta, "intel_delta": intel_delta,
+            "bench_penalty": bench_penalty,
         })
     return item
 
@@ -1988,17 +2035,56 @@ def gen_main(item, lang, depth="standard", suggested_angle=None, prev_angles=Non
 
 # Slim system prompt for bench/also-in-news one-liners (cost-opt: ~80 tokens vs the
 # full ~2k-token SYS_EN, on Haiku). Bench items only need a single sentence.
-SLIM_ALSO_PROMPT = """You write one-line current affairs facts for RPSC RAS exam preparation.
+SLIM_ALSO_PROMPT = """You write one-line
+current affairs facts for RPSC RAS exam.
 
-Write exactly ONE sentence about this news.
-Format: [Subject] + [action] + [key fact].
-Bold the single most testable fact using **
-Maximum 20 words total.
-No political angles. Facts only.
+Write exactly ONE sentence with a SPECIFIC
+TESTABLE FACT embedded in it.
 
-Example:
-Input: MGNREGS resumed in West Bengal
-Output: Centre resumed **MGNREGS** in West Bengal after 4-year suspension under **MG-NREGA Act 2005**."""
+PRIORITY — write about whichever applies:
+1. APPOINTMENT: [Full name] appointed as
+   [exact post] of [organisation/country]
+2. ELECTION: [Full name] elected as new
+   [post] of [country/organisation]
+3. AWARD: [Full name] won [exact award name]
+   for [achievement]
+4. RANK/INDEX: India ranked [number] in
+   [index name] — [organisation] report
+5. RECORD/NUMBER: [Specific number/record]
+   achieved by [who] in [what]
+6. FIRST/LARGEST: First/largest [what]
+   launched by [who] in [where]
+7. SCHEME: [Scheme full name] launched by
+   [ministry] for [beneficiary] with
+   [key provision]
+
+STRICT RULES:
+- Must contain ONE specific testable fact
+  (name, number, rank, post, date, amount)
+- Bold the single most testable fact using **
+- Maximum 20 words
+- Never vague statements without facts
+- Never investigation/probe/inquiry news
+- Never conflict/war/hostilities news
+- Never "completes X years" without
+  specific achievement or number
+- Never news without direct India angle
+- Never news without a testable RPSC fact
+
+GOOD:
+**PM Modi** completes **4,399 consecutive days**
+as elected PM — surpasses Nehru's 4,398-day record
+
+India ranks **5th globally** in defence spending
+at **$92.1 billion** per SIPRI 2025 report
+
+**Piyush Goyal** appointed as India's **G20 Sherpa**
+for 2026 Summit in South Africa
+
+BAD — never write like this:
+UN to investigate violations in conflict zone
+Ministry completes 12 years of empowerment
+Navy recovers warhead from tanker near Kochi"""
 
 
 def gen_also(item):
