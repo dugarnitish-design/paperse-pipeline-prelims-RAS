@@ -1091,10 +1091,9 @@ def classify_item_type(item):
 NEW_INFO_WORDS = ("new", "revised", "amended", "increased", "extended", "launched",
                   "passed", "enacted", "changed", "updated", "announced")
 
-def _coverage_modifier(match_text, low_text):
+def _coverage_modifier(cov, low_text):
     """Score delta from topic_coverage recency: never-covered +0.3, 45+d +0.1,
     15-45d 0, 7-15d -0.2, <7d -0.5 — penalties suppressed by NEW_INFO_WORDS."""
-    _ti, cov = match_topic(match_text)
     if not cov:
         return 0.0
     days = cov.get("days_since_covered", 9999) or 9999
@@ -1109,6 +1108,44 @@ def _coverage_modifier(match_text, low_text):
     return -0.2 if days >= 7 else -0.5
 
 
+# §6A — topic_intelligence scoring boost + §8 blacklist penalty.
+_BLACKLIST = None
+_BL_STOP = {"this", "that", "news", "item", "only", "with", "from", "into", "the", "and",
+            "not", "for", "are", "was", "has"}
+
+def _blacklist():
+    """Lazy-load topic_blacklist as [(content_tokens, lesson)] once per process."""
+    global _BLACKLIST
+    if _BLACKLIST is None:
+        rows = []
+        try:
+            for r in (C.sb_select("topic_blacklist", params={"limit": "2000"}) or []):
+                toks = [t for t in re.split(r"[^a-z0-9]+", (r.get("pattern") or "").lower())
+                        if len(t) >= 4 and t not in _BL_STOP]
+                if toks:
+                    rows.append((toks, r.get("lesson") or r.get("pattern")))
+        except Exception as e:
+            C.log(f"   ⚠ blacklist load failed: {e}")
+        _BLACKLIST = rows
+    return _BLACKLIST
+
+def _intel_modifier(ti, low_text):
+    """+0.3 HIGH / +0.1 MEDIUM topic_intelligence match, +0.1 if RISING; -0.3 if the
+    text matches a topic_blacklist pattern (≥2 of its content tokens present)."""
+    delta = 0.0
+    if ti:
+        freq = ti.get("rpsc_frequency")
+        delta += 0.3 if freq == "HIGH" else 0.1 if freq == "MEDIUM" else 0.0
+        if ti.get("frequency_trend") == "RISING":
+            delta += 0.1
+    for toks, lesson in _blacklist():
+        if sum(1 for t in toks if t in low_text) >= max(2, len(toks) // 2):
+            C.log(f"   ⚑ blacklist match — {lesson}")
+            delta -= 0.3
+            break
+    return delta
+
+
 def score_item(item, cats):
     """LAYER: category_keyword_filter — SCORE ONLY (not a hard gate).
 
@@ -1120,8 +1157,11 @@ def score_item(item, cats):
     toks = tokenize(text)
     low = text.lower()
     item_raj = any(k in low for k in RAJ_KEYS)
-    # §5A coverage modifier (flat +/- applied to the final priority below).
-    cov_delta = _coverage_modifier(f"{item.get('title', '')} {low[:300]}", low)
+    # §5A coverage + §6A topic-intelligence/blacklist deltas (flat +/- on final priority).
+    _ti_row, _cov_row = match_topic(f"{item.get('title', '')} {low[:300]}")
+    cov_delta = _coverage_modifier(_cov_row, low)
+    intel_delta = _intel_modifier(_ti_row, low)
+    score_delta = cov_delta + intel_delta
 
     best, best_score, best_core = None, 0, 0
     for c in cats:
@@ -1169,10 +1209,10 @@ def score_item(item, cats):
             "rajasthan_angle": item_raj or bool(best.get("rajasthan_angle")),
             "static_connect": static_connect, "static_subject": best.get("static_subject"),
             "exam_ref": exam_ref,
-            "priority": round(priority * quality * tier_weight * intent_mult + cov_delta, 3),
+            "priority": round(priority * quality * tier_weight * intent_mult + score_delta, 3),
             "match_score": best_score, "match_core": best_core,
             "text_quality": round(quality, 2), "intent_mult": intent_mult,
-            "coverage_delta": cov_delta,
+            "coverage_delta": cov_delta, "intel_delta": intel_delta,
         })
     else:
         # FIX 1 — no category matched. A flat 0.2 made every uncategorised item tie.
@@ -1185,9 +1225,9 @@ def score_item(item, cats):
         item.update({
             "category": None, "tier": 3, "rajasthan_angle": item_raj,
             "static_connect": None, "static_subject": None, "exam_ref": None,
-            "priority": round(base * quality + cov_delta, 3), "match_score": 0, "match_core": 0,
+            "priority": round(base * quality + score_delta, 3), "match_score": 0, "match_core": 0,
             "text_quality": round(quality, 2), "intent_mult": 1.0,
-            "coverage_delta": cov_delta,
+            "coverage_delta": cov_delta, "intel_delta": intel_delta,
         })
     return item
 
@@ -1579,7 +1619,8 @@ def _topic_index():
     topics, coverage = [], {}
     try:
         ti = C.sb_select("topic_intelligence", select=(
-            "topic,subject,rpsc_frequency,frequency_trend,pyq_count,capture_keywords"),
+            "topic,subject,rpsc_frequency,frequency_trend,pyq_count,capture_keywords,"
+            "what_rpsc_tests,what_rpsc_never_tests,typical_question_types"),
             params={"limit": "2000"}) or []
         for t in ti:
             kws = t.get("capture_keywords") or []
@@ -1742,7 +1783,25 @@ def _group_key(it):
     return f"{it.get('source', '')}|{(it.get('title') or '').replace('**', '')[:120]}"
 
 
-def gen_main(item, lang, depth="standard", suggested_angle=None, prev_angles=None):
+def _intel_block(ti):
+    """§6B — RPSC exam-intelligence guidance for the matched topic (skipped if None)."""
+    if not ti:
+        return ""
+    def _lst(v):
+        if isinstance(v, str):
+            try: v = json.loads(v)
+            except Exception: v = []
+        return ", ".join(str(x) for x in (v or [])) or "—"
+    return ("RPSC EXAM INTELLIGENCE FOR THIS TOPIC:\n"
+            f"Topic: {ti.get('topic')}\n"
+            f"RPSC frequency: {ti.get('rpsc_frequency')}\n"
+            f"RPSC tests these facts: {_lst(ti.get('what_rpsc_tests'))}\n"
+            f"RPSC never tests: {_lst(ti.get('what_rpsc_never_tests'))}\n"
+            f"Typical question types: {_lst(ti.get('typical_question_types'))}\n"
+            "Your bullets MUST cover the tested facts above. Your RPSC Angle MUST ask about "
+            "tested facts only. Never write about never-tested facts.\n\n")
+
+def gen_main(item, lang, depth="standard", suggested_angle=None, prev_angles=None, topic_intel=None):
     """Judge (STEP 1) + author (STEP 2) one item in `lang`. Returns the model's dict:
     {verdict, reason, item_type, needs_verify, summary, bullets, rpsc_angle}. `title`
     is injected from the news item (the prompt emits no title). A verdict of NO means
@@ -1760,7 +1819,8 @@ def gen_main(item, lang, depth="standard", suggested_angle=None, prev_angles=Non
         angle_block = (f"Cover this specific angle: {suggested_angle}\n"
                        f"Previous angles already covered: {prev_angles or []}\n"
                        "Do NOT repeat information from previous coverage. New information only.\n\n")
-    user = (f"News item ({item['source']}): {item['text']}\n"
+    user = (f"{_intel_block(topic_intel)}"
+            f"News item ({item['source']}): {item['text']}\n"
             f"Category: {item.get('category')}.\n"
             f"DEPTH: {depth} → write {depth_n} bullets (follow the SYS_EN DEPTH RULE).\n"
             f"{angle_block}"
@@ -2111,14 +2171,14 @@ def main(news_date, label_date, dry_run=False):
         it["_suggested_angle"] = angle
         C.log(f"   • main {len(main_rows_inserted) + 1}/5 [{depth}"
               f"{'/' + angle if angle else ''}]: {it.get('category')} …")
-        en = gen_main(it, "EN", depth, angle, prev_angles)
+        en = gen_main(it, "EN", depth, angle, prev_angles, ti_row)
         if en["verdict"] == "NO":
             C.log(f"     ⤫ author-gate dropped: {(it.get('title') or '')[:45]} — {en.get('reason', '')[:60]}")
             if bi < len(bench):                       # backfill with the next bench item
                 nxt = bench[bi]; bi += 1
                 bench_used.add(id(nxt)); queue.append(nxt)
             continue
-        hi = gen_main(it, "HI", depth, angle, prev_angles)
+        hi = gen_main(it, "HI", depth, angle, prev_angles, ti_row)
         needs_verify = bool(en.get("needs_verify") or hi.get("needs_verify"))
         # Category from the detected news_type (overrides the loose keyword scorer).
         # Pass title+summary so TYPE 7 picks the right Rajasthan sub-category.
