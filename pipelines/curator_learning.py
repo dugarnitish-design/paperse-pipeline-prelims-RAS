@@ -25,6 +25,23 @@ MAX_TIER_WEIGHT         = 1.0
 PRIORITY_REJECT_THRESH  = 3      # Decrease priority_score after N rejections
 PRIORITY_DECREMENT      = 0.1
 
+# §8 — precision rejection learning. Haiku turns the curator's free-text reason into a
+# reusable rule (pattern + lesson + scope), optionally a blacklist the scorer penalises.
+REJECT_EXTRACT_SYS = (
+    "You analyse why an RPSC RAS exam-prep current-affairs item was REJECTED by an expert "
+    "curator. From the item and the curator's reason, extract a REUSABLE rejection rule. "
+    "Return ONLY JSON with keys:\n"
+    '"pattern": a 3-8 word content pattern describing the KIND of item to suppress, using '
+    "concrete nouns from the item (e.g. 'minor district-level sports award', 'routine MoU "
+    "signing'); empty string if the reason is one-off and not generalisable.\n"
+    '"lesson": one-line instruction to the author/scorer to prevent this in future.\n'
+    '"scope": "pattern_wide" if this rejection should suppress ALL future similar items '
+    '(needs a clear, generalisable content pattern), or "item_only" if it is a one-off '
+    "specific to this item.\n"
+    '"penalise_category": true only if the WHOLE category is low-value/over-represented.\n'
+    "Be precise. Use item_only for vague, subjective or one-off reasons. No text outside the JSON."
+)
+
 
 class CuratorLearning:
     """
@@ -102,13 +119,87 @@ class CuratorLearning:
         if topic:
             topic_result = self.update_topic_intelligence(topic)
 
+        # 4. §8 — precision learning from the curator's free-text reason.
+        learn_result = self.learn_from_free_text(
+            item_title=item_title, free_text=rejection_reason, category=category,
+            item_id=item_id, rejected_text=rejected_text, date_str=date_str)
+
         return {
             "success": True,
             "action": "rejected",
             "item_title": item_title,
             "category_update": cat_result,
             "topic_update": topic_result,
+            "rejection_learning": learn_result,
         }
+
+    def learn_from_free_text(self, item_title, free_text, category="", item_id=None,
+                             news_type="", rejected_text="", date_str=None) -> dict:
+        """§8 — precision rejection learning. Haiku turns the curator's free-text reason
+        into a reusable rule: always records rejection_learnings, and (only when the rule
+        generalises) writes/bumps a topic_blacklist pattern that the scorer (§6A) penalises
+        by -0.3. Best-effort — a model/DB failure logs and returns {} but never raises, so
+        the curator's reject click is never blocked."""
+        free_text = (free_text or "").strip()
+        if not free_text:
+            return {}
+        date_str = date_str or datetime.date.today().isoformat()
+        user = (f"Item title: {item_title}\nCategory: {category}\nNews type: {news_type}\n"
+                f"Item text: {(rejected_text or '')[:500]}\n"
+                f"Curator's rejection reason: {free_text}\n\nReturn the JSON.")
+        data = {}
+        try:
+            data, _ = C.claude_json(REJECT_EXTRACT_SYS, user, max_tokens=300,
+                                    model=C.HAIKU_MODEL, cache_system=True)
+            if not isinstance(data, dict):
+                data = {}
+        except Exception as e:
+            C.log(f"  ⚠ §8 rejection extraction failed: {e}")
+        pattern  = (data.get("pattern") or "").strip()
+        lesson   = (data.get("lesson") or free_text).strip()
+        scope    = (data.get("scope") or "item_only").strip().lower()
+        if scope not in ("item_only", "pattern_wide"):    # CHECK constraint guard
+            scope = "pattern_wide" if pattern else "item_only"
+        pen_cat  = bool(data.get("penalise_category"))
+        do_black = (scope == "pattern_wide") and bool(pattern)
+
+        # rejection_learnings — always record the reason + extracted rule.
+        try:
+            C.sb_insert("rejection_learnings", {
+                "date": date_str, "item_id": str(item_id) if item_id else None,
+                "item_title": item_title, "free_text_reason": free_text,
+                "extracted_pattern": pattern, "lesson": lesson,
+                "penalise_category": pen_cat, "scope": scope,
+                "category": category, "news_type": news_type,
+            }, returning=False)
+        except Exception as e:
+            C.log(f"  ⚠ rejection_learnings insert failed: {e}")
+
+        # topic_blacklist — only generalisable patterns; dedup by pattern, bump count.
+        if do_black:
+            try:
+                existing = C.sb_select("topic_blacklist", select="id,pattern,rejection_count",
+                                       params={"limit": "2000"}) or []
+                match = next((r for r in existing
+                              if (r.get("pattern") or "").strip().lower() == pattern.lower()), None)
+                now = datetime.datetime.utcnow().isoformat() + "Z"
+                if match:
+                    C.sb_update("topic_blacklist", {
+                        "rejection_count": (match.get("rejection_count") or 1) + 1,
+                        "last_rejected": now, "lesson": lesson, "penalise_category": pen_cat,
+                    }, {"id": match["id"]})
+                else:
+                    C.sb_insert("topic_blacklist", {
+                        "pattern": pattern, "lesson": lesson, "penalise_category": pen_cat,
+                        "rejection_count": 1, "last_rejected": now,
+                    }, returning=False)
+                C.log(f"  ✓ §8 blacklist learned: {pattern!r}")
+            except Exception as e:
+                C.log(f"  ⚠ topic_blacklist write failed: {e}")
+
+        C.log(f"  ✓ §8 rejection learned — scope={scope} pattern={pattern!r} blacklist={do_black}")
+        return {"pattern": pattern, "lesson": lesson, "scope": scope,
+                "penalise_category": pen_cat, "blacklisted": do_black}
 
     def log_replacement(
         self,
