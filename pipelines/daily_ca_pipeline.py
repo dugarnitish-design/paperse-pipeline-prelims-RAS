@@ -1540,6 +1540,92 @@ def _category_from_type(news_type, keyword_category, text=""):
     return TYPE_CATEGORY.get(nt, keyword_category)
 
 
+# ── Topic intelligence index (loaded once) + matcher ─────────────────────────────
+_TOPIC_INDEX = None
+
+def _topic_index():
+    """Lazy-load topic_intelligence + topic_coverage once per process. Returns
+    {'topics': [row+_kws], 'coverage': {topic: cov_row}}."""
+    global _TOPIC_INDEX
+    if _TOPIC_INDEX is not None:
+        return _TOPIC_INDEX
+    topics, coverage = [], {}
+    try:
+        ti = C.sb_select("topic_intelligence", select=(
+            "topic,subject,rpsc_frequency,frequency_trend,pyq_count,capture_keywords"),
+            params={"limit": "2000"}) or []
+        for t in ti:
+            kws = t.get("capture_keywords") or []
+            if isinstance(kws, str):
+                try: kws = json.loads(kws)
+                except Exception: kws = []
+            t["_kws"] = [str(k).lower() for k in kws if k]
+            topics.append(t)
+        coverage = {c["topic"]: c for c in (C.sb_select("topic_coverage", params={"limit": "2000"}) or [])}
+    except Exception as e:
+        C.log(f"   ⚠ topic index load failed (continuing without): {e}")
+    _TOPIC_INDEX = {"topics": topics, "coverage": coverage}
+    return _TOPIC_INDEX
+
+def match_topic(text):
+    """Best topic_intelligence match for `text` (most capture-keyword hits, ties →
+    higher pyq_count). Returns (topic_intel_row|None, topic_coverage_row|None)."""
+    t = (text or "").lower()
+    if not t:
+        return None, None
+    idx = _topic_index()
+    best, best_hits = None, 0
+    for top in idx["topics"]:
+        hits = sum(1 for k in top["_kws"] if k and k in t)
+        if hits > best_hits or (hits and hits == best_hits and best
+                                and (top.get("pyq_count") or 0) > (best.get("pyq_count") or 0)):
+            best, best_hits = top, hits
+    if not best_hits:
+        return None, None
+    return best, idx["coverage"].get(best["topic"])
+
+def _proxy_type(category):
+    """Pre-authoring TYPE proxy from the keyword category (real news_type only arrives
+    with gen_main's reply, but depth must be decided before authoring). Only TYPE 1/8
+    matter for the depth rules."""
+    c = (category or "").lower()
+    if "bill" in c or "legislation" in c:
+        return "8"
+    if "scheme" in c:
+        return "1"
+    return ""
+
+def detect_depth(news_type, score, ti, cov):
+    """standard (5) / important (7) / landmark (∞) — drives the bullet count (honored
+    by SYS_EN in §10). Uses score + topic_intelligence + topic_coverage."""
+    freq = (ti or {}).get("rpsc_frequency")
+    trend = (ti or {}).get("frequency_trend")
+    pyq = (ti or {}).get("pyq_count") or 0
+    days = (cov or {}).get("days_since_covered", 9999)
+    cnt = (cov or {}).get("coverage_count", 0)
+    nt = (news_type or "").strip().upper()
+    # LANDMARK
+    if nt == "8" and score > 1.8:
+        return "landmark"
+    if score > 2.5 and days > 90:
+        return "landmark"
+    # IMPORTANT
+    if freq == "HIGH" and trend == "RISING":
+        return "important"
+    if days > 45 and freq == "HIGH":
+        return "important"
+    if nt == "1" and score > 2.0:
+        return "important"
+    if cnt == 0 and freq in ("HIGH", "MEDIUM"):
+        return "important"
+    if pyq >= 8 and score > 1.5:        # heavily-tested topic → more depth
+        return "important"
+    if pyq >= 5 and cnt == 0:           # first coverage of a heavily-tested topic
+        return "important"
+    # STANDARD
+    return "standard"
+
+
 def _group_key(it):
     """Stable per-story key SHARED by the EN and HI rows of one item, so curator
     status/is_main changes always update both languages in lockstep (see
@@ -1551,26 +1637,31 @@ def _group_key(it):
     return f"{it.get('source', '')}|{(it.get('title') or '').replace('**', '')[:120]}"
 
 
-def gen_main(item, lang):
+def gen_main(item, lang, depth="standard"):
     """Judge (STEP 1) + author (STEP 2) one item in `lang`. Returns the model's dict:
     {verdict, reason, item_type, needs_verify, summary, bullets, rpsc_angle}. `title`
     is injected from the news item (the prompt emits no title). A verdict of NO means
     the caller should DROP this item and backfill from the bench — Layer 3 already
-    pre-filtered, this is the stricter final 'would RPSC set an MCQ?' gate."""
+    pre-filtered, this is the stricter final 'would RPSC set an MCQ?' gate.
+    `depth` (standard/important/landmark) sets the target bullet count; the SYS_EN
+    DEPTH RULE (§10) defines 5 / 7 / as-many-as-needed."""
     sysmsg = SYS_EN if lang == "EN" else SYS_HI
     lang_word = "English" if lang == "EN" else "Hindi (Devanagari, freshly authored, not translated)"
+    depth_n = {"standard": "exactly 5", "important": "exactly 7",
+               "landmark": "as many as needed (8-12)"}.get(depth, "exactly 5")
     user = (f"News item ({item['source']}): {item['text']}\n"
-            f"Category: {item.get('category')}.\n\n"
+            f"Category: {item.get('category')}.\n"
+            f"DEPTH: {depth} → write {depth_n} bullets (follow the SYS_EN DEPTH RULE).\n\n"
             f"Apply STEP 1 (MCQ test). If YES/MAYBE, write the {lang_word} content per the matching "
-            f"TYPE format (EXACTLY 5 bullets, bullet 1 = the news fact, bullets 2-5 from your own "
-            f"knowledge). Return ONLY JSON:\n"
+            f"TYPE format (bullet 1 = the news fact, the rest from your own knowledge). "
+            f"Return ONLY JSON:\n"
             '{"verdict": "YES|MAYBE|NO", "reason": "one line", '
             '"news_type": "the TYPE number 1-9 you used, or DEFAULT", '
             '"item_type": "main|also|null", "needs_verify": true, '
             '"title": "headline for this item, max 10 words, in the SAME language as the '
             'bullets, no ** markers (null if verdict NO)", '
             '"summary": "one line why in news today (null if verdict NO)", '
-            '"bullets": ["EXACTLY 5 bullets, max 15 words each, key facts wrapped in **double asterisks** '
+            f'"bullets": ["{depth_n} bullets, key facts wrapped in **double asterisks** '
             '(null if verdict NO)"], '
             '"rpsc_angle": "RPSC can ask: Q1: ...? / Q2: ...? / Q3: ...?  (null if verdict NO)"}')
     data, _ = C.claude_json(sysmsg, user, max_tokens=1200, cache_system=True)  # cache SYS_EN/SYS_HI
@@ -1896,15 +1987,21 @@ def main(news_date, label_date, dry_run=False):
     bench_used, bi = set(), 0
     while len(main_rows_inserted) < 5 and queue:
         it = queue.pop(0)
-        C.log(f"   • main {len(main_rows_inserted) + 1}/5: {it.get('category')} …")
-        en = gen_main(it, "EN")
+        # Importance-based depth (§4): detected BEFORE authoring from score + topic
+        # intelligence + coverage, so gen_main writes the right bullet count. news_type
+        # isn't known yet (it comes with gen_main's reply), so use a keyword-category proxy.
+        ti_row, cov_row = match_topic(f"{it.get('title', '')} {(it.get('text') or '')[:200]}")
+        score = it.get("final_priority_score", it.get("priority", 0.5))
+        depth = detect_depth(_proxy_type(it.get("category")), score, ti_row, cov_row)
+        C.log(f"   • main {len(main_rows_inserted) + 1}/5 [{depth}]: {it.get('category')} …")
+        en = gen_main(it, "EN", depth)
         if en["verdict"] == "NO":
             C.log(f"     ⤫ author-gate dropped: {(it.get('title') or '')[:45]} — {en.get('reason', '')[:60]}")
             if bi < len(bench):                       # backfill with the next bench item
                 nxt = bench[bi]; bi += 1
                 bench_used.add(id(nxt)); queue.append(nxt)
             continue
-        hi = gen_main(it, "HI")
+        hi = gen_main(it, "HI", depth)
         needs_verify = bool(en.get("needs_verify") or hi.get("needs_verify"))
         # Category from the detected news_type (overrides the loose keyword scorer).
         # Pass title+summary so TYPE 7 picks the right Rajasthan sub-category.
@@ -1916,6 +2013,7 @@ def main(news_date, label_date, dry_run=False):
                     source=it["source"], rajasthan_angle=it["rajasthan_angle"],
                     priority=it.get("final_priority_score", it.get("priority", 0.5)),
                     is_main=True, item_type="main",
+                    depth=depth,                        # §4 importance-based depth
                     needs_verify=needs_verify,          # curator-verify flag (model unsure)
                     # shared EN/HI key so curator status changes stay in lockstep
                     group_key=_group_key(it),
