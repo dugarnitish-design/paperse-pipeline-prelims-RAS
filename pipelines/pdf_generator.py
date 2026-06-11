@@ -87,6 +87,10 @@ body.hi, .hi {{ font-family:'NotoDeva','Noto Sans Devanagari', sans-serif; }}
 ul {{ margin:4px 0 5px 0; padding-left:18px; }}
 li {{ font-size:12px; color:#1f2937; margin-bottom:2px; line-height:1.4; }}
 li b, li strong {{ color:#000000; font-weight:700; }}
+/* §14 — depth-based bullet sizing so more-bullet items still fit the 2-page cap */
+.depth-standard  li {{ font-size:9.5pt; }}
+.depth-important li {{ font-size:9pt; }}
+.depth-landmark  li {{ font-size:8.5pt; }}
 
 .rpsc-angle {{ background:#F3E5F5; border-left:3px solid #7B1FA2; padding:5px 10px;
                font-size:12px; font-style:italic; color:#6A1B9A; margin:4px 0; border-radius:0 4px 4px 0; }}
@@ -242,9 +246,26 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
     ds = date.isoformat()
     pretty = date.strftime("%d %B %Y")
     L = labels
+
+    # §14 — dynamic 2-page layout. Total bullets across the 5 main items decides how
+    # many also-in-news entries (and in what style) fill page 2 without spilling to 3.
+    count_bullets = sum(len(it.get("bullets") or []) for it in main_items)
+    if count_bullets <= 25:
+        also_n, also_style = 5, "full"        # roomy day → full one-liners
+    elif count_bullets <= 30:
+        also_n, also_style = 5, "compact"     # titles only
+    elif count_bullets <= 35:
+        also_n, also_style = 3, "compact"
+    else:
+        also_n, also_style = 1, "minimal"     # very dense main section → 1 title
+    also_items = (also_items or [])[:also_n]
+
     items_html = []
     for it in main_items:
         color = category_color(it.get("category"))
+        depth = (it.get("depth") or "standard").strip().lower()
+        if depth not in ("standard", "important", "landmark"):
+            depth = "standard"
         # Bullets: **text** → <b>text</b> (key names/numbers/dates rendered bold black)
         bullets = "".join(f"<li>{md_bold(_strip_news_fact(b))}</li>" for b in (it.get("bullets") or []))
 
@@ -258,7 +279,7 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
                      if it.get("rpsc_angle") else "")
 
         items_html.append(f"""
-        <div class="item" style="border-left-color:{color};">
+        <div class="item depth-{depth}" style="border-left-color:{color};">
           <div class="cat" style="color:{color};">{esc(it.get('category'))}</div>
           <div class="title">{esc(it.get('title')).replace('**','')}</div>
           <div class="summary">{md_bold(it.get('summary'))}</div>
@@ -269,9 +290,14 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
 
     also_html = ""
     if also_items:
-        lis = "".join(
-            f"<li><span class='t'>{esc(a.get('title')).replace('**','')}</span> — {md_bold(a.get('one_liner'))}</li>"
-            for a in also_items)
+        if also_style == "full":          # title + one-liner description
+            lis = "".join(
+                f"<li><span class='t'>{esc(a.get('title')).replace('**','')}</span> — {md_bold(a.get('one_liner'))}</li>"
+                for a in also_items)
+        else:                              # 'compact' / 'minimal' → title only
+            lis = "".join(
+                f"<li><span class='t'>{esc(a.get('title')).replace('**','')}</span></li>"
+                for a in also_items)
         also_html = f"<div class='also'><h2>{L['also']}</h2><ul>{lis}</ul></div>"
 
     # FIX 3: the "Static connects today" summary line is removed (internal metadata).
