@@ -1495,14 +1495,48 @@ TYPE_CATEGORY = {
     "9": "Monetary Policy & RBI",
 }
 
-def _category_from_type(news_type, keyword_category):
-    """Resolve the display category from the detected news_type, overriding the loose
-    keyword result. TYPE 7 forces a Rajasthan category (keeps the keyword one if it is
-    already Rajasthan-specific); DEFAULT / unknown keep the keyword category."""
+# TYPE 7 (Rajasthan) sub-type → existing ca_categories. economy & politics both map to
+# "Rajasthan Politics & Governance" (no separate Rajasthan-Economy category exists).
+RAJASTHAN_CATEGORY_RULES = {
+    "geography": "Rajasthan Geography",
+    "scheme":    "Rajasthan Schemes & Programmes",
+    "culture":   "Rajasthan Art, Culture & Heritage",
+    "sports":    "Rajasthan Sports & Awards",
+    "politics":  "Rajasthan Politics & Governance",
+    "economy":   "Rajasthan Politics & Governance",
+}
+# Keyword sets per sub-type, checked in THIS precedence order (distinctive intents —
+# scheme/culture/sports — before the broad geography/economy buckets; else politics).
+_RAJ_SUBTYPE_ORDER = [
+    ("scheme",    ["yojana", "scheme", "mission", "programme", "welfare", "subsidy",
+                   "beneficiary", "launch", "mukhyamantri", "rajasthan government"]),
+    ("culture",   ["festival", "folk", "dance", "music", "art", "craft", "heritage",
+                   "temple", "fort", "palace", "tradition", "mela", "fair", "costume",
+                   "painting", "rajput"]),
+    ("sports",    ["sports", "athlete", "player", "tournament", "medal", "game", "championship"]),
+    ("geography", ["river", "lake", "dam", "desert", "mountain", "district", "region",
+                   "terrain", "rainfall", "soil", "mineral", "thar", "aravalli",
+                   "chambal", "luni", "banas"]),
+    ("economy",   ["gdp", "budget", "industry", "trade", "revenue", "investment",
+                   "employment", "agriculture", "msp", "crop", "tourism"]),
+]
+
+def _rajasthan_subcategory(text):
+    """Detect the Rajasthan sub-type from title+summary → existing ca_category."""
+    t = (text or "").lower()
+    for sub, kws in _RAJ_SUBTYPE_ORDER:
+        if any(k in t for k in kws):
+            return RAJASTHAN_CATEGORY_RULES[sub]
+    return RAJASTHAN_CATEGORY_RULES["politics"]      # default
+
+def _category_from_type(news_type, keyword_category, text=""):
+    """Resolve the display category from the detected news_type — the SINGLE source of
+    truth for category (the keyword scorer's category is only the DEFAULT fallback).
+    TYPE 7 maps to the right Rajasthan sub-category from the text; DEFAULT/unknown keep
+    the keyword category."""
     nt = (news_type or "").strip().upper()
     if nt == "7":
-        kc = keyword_category or ""
-        return kc if kc.startswith("Rajasthan") else "Rajasthan Politics & Governance"
+        return _rajasthan_subcategory(text)
     return TYPE_CATEGORY.get(nt, keyword_category)
 
 
@@ -1873,7 +1907,9 @@ def main(news_date, label_date, dry_run=False):
         hi = gen_main(it, "HI")
         needs_verify = bool(en.get("needs_verify") or hi.get("needs_verify"))
         # Category from the detected news_type (overrides the loose keyword scorer).
-        cat = _category_from_type(en.get("news_type"), it.get("category"))
+        # Pass title+summary so TYPE 7 picks the right Rajasthan sub-category.
+        cat = _category_from_type(en.get("news_type"), it.get("category"),
+                                  f"{it.get('title', '')} {en.get('summary') or ''}")
         if cat != it.get("category"):
             C.log(f"     ↳ category: {it.get('category')} → {cat} (TYPE {en.get('news_type')})")
         base = dict(date=label_date.isoformat(), category=cat, tier=it["tier"],
