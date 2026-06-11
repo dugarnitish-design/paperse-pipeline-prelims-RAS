@@ -304,6 +304,59 @@ def change_depth(date, iid):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/curator/<date>/item/<int:iid>/promote", methods=["POST"])
+@require_auth
+def promote_item(date, iid):
+    """§9 bench promotion — a bench (also-in-news) item is only a one-liner. Promoting it
+    AUTHORS full content (gen_main EN + HI), persists bullets/rpsc_angle/summary/depth/
+    category onto the row, and returns the authored content so the dashboard can expand it
+    into a full editable card (identical to a Top-5 item). is_main is left false — the
+    publish flow flips it for the selected set; selection is the checkbox the UI ticks."""
+    it = _item_row(date, iid)
+    if not it:
+        return jsonify({"error": "item not found"}), 404
+    try:
+        from pipelines.daily_ca_pipeline import (gen_main, detect_depth, match_topic,
+                                                 _proxy_type, _category_from_type)
+    except Exception as e:
+        return jsonify({"error": f"gen unavailable: {e}"}), 500
+    base = it.get("one_liner") or it.get("summary") or ""
+    text = f"{it.get('title','')}. {base}"
+    src = {"source": it.get("source") or "news", "text": text, "category": it.get("category", "")}
+    try:
+        ti, _cov = match_topic(text)
+        depth = detect_depth(_proxy_type(it.get("category")), it.get("priority") or 1.0, ti, _cov)
+        en = gen_main(src, "EN", depth=depth, topic_intel=ti)
+        bullets = en.get("bullets") or []
+        angle   = en.get("rpsc_angle") or ""
+        summary = en.get("summary") or it.get("summary") or base
+        title   = (en.get("title") or it.get("title") or "").replace("**", "").strip()
+        cat     = _category_from_type(en.get("news_type"), it.get("category"), text)
+        C.sb_update("daily_ca_items",
+                    {"bullets": bullets, "rpsc_angle": angle, "summary": summary,
+                     "title": title, "depth": depth, "category": cat},
+                    {"id": str(iid)})
+        gk = it.get("group_key")
+        if gk:
+            try:
+                hi = gen_main(src, "HI", depth=depth, topic_intel=ti)
+                C.sb_update("daily_ca_items",
+                            {"bullets": hi.get("bullets") or bullets,
+                             "rpsc_angle": hi.get("rpsc_angle") or angle,
+                             "summary": hi.get("summary") or summary,
+                             "title": (hi.get("title") or title).replace("**", "").strip(),
+                             "depth": depth, "category": cat},
+                            {"date": date, "language": "HI", "group_key": gk})
+            except Exception as e:
+                C.log(f"  ⚠ promote HI author failed (non-fatal): {e}")
+        return jsonify({"ok": True, "id": iid, "title": title, "summary": summary,
+                        "category": cat, "depth": depth, "bullets": bullets,
+                        "rpsc_angle": angle, "needs_verify": bool(en.get("needs_verify"))}), 200
+    except Exception as e:
+        C.log(f"  ⚠ promote_item {iid} failed: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/curator/<date>/mcq/<int:mid>/delete", methods=["POST"])
 @require_auth
 def delete_mcq(date, mid):

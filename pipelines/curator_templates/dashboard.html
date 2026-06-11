@@ -403,6 +403,7 @@
 
 <script>
 const date = "{{ date }}";
+const CATEGORIES = {{ categories|tojson }};
 const MIN_PUBLISH = 3;
 const mainList = document.getElementById('mainList');
 const selBar = document.getElementById('selBar');
@@ -627,26 +628,132 @@ function commitRejection(id) {
     item.classList.remove('is-approved'); item.classList.add('is-rejected');
     autoPromote(); armVerify(); updateCount();
 }
+// auto-fill an opened slot from the bench (highest-scoring new-category item), then author it
 function autoPromote() {
     const topCats = new Set(currentTop().map(c => c.dataset.category).filter(Boolean));
-    const bench = Array.from(document.querySelectorAll('#alsoList .also-check:not(:checked)'));
+    const bench = Array.from(document.querySelectorAll('#alsoList .also-item:not([data-promoting])'))
+        .map(r => r.querySelector('.also-check')).filter(Boolean);
     if (!bench.length) { showToast('Bench exhausted — no auto-fill available', 'info'); return false; }
-    let pick = bench.find(c => c.dataset.category && !topCats.has(c.dataset.category)) || bench[0];
-    pick.checked = true;
-    const row = pick.closest('.also-item');
-    row.style.borderColor = '#16a34a'; row.style.background = '#f0fdf4';
-    row.querySelector('.also-title').insertAdjacentHTML('beforeend', ' <span style="color:#16a34a;font-weight:700">▲ promoted — verify before publish</span>');
-    const btn = row.querySelector('button'); if (btn) { btn.textContent = '✓ In Top 5'; btn.disabled = true; }
+    const pick = bench.find(c => c.dataset.category && !topCats.has(c.dataset.category)) || bench[0];
+    promoteToFull(pick.dataset.id, true);
     return true;
 }
-function promoteManual(id) {
-    const cb = document.querySelector(`.also-check[data-id="${id}"]`);
-    if (!cb || cb.checked) return;
-    cb.checked = true;
-    const row = cb.closest('.also-item');
-    row.style.borderColor = '#16a34a'; row.style.background = '#f0fdf4';
-    const btn = row.querySelector('button'); if (btn) { btn.textContent = '✓ In Top 5'; btn.disabled = true; }
-    armVerify(); updateCount(); showToast('Promoted to Top 5', 'success');
+function promoteManual(id) { promoteToFull(id, false); }
+
+// Author full content for a bench item, then replace its compact row with a full editable
+// card in the Top-5 list — identical to a top-5 item (category/depth dropdowns, editable
+// bullets + RPSC angle, MCQ section, Approve/Reject).
+async function promoteToFull(id, fromAuto) {
+    const row = document.querySelector(`.also-item[data-id="${id}"]`);
+    if (!row || row.dataset.promoting) return;
+    row.dataset.promoting = "1";
+    const btn = row.querySelector('button');
+    if (btn) { btn.textContent = '⏳ Authoring…'; btn.disabled = true; }
+    row.style.opacity = '0.6';
+    try {
+        const r = await fetch(`/curator/${date}/item/${id}/promote`, { method: 'POST' });
+        const d = await r.json();
+        if (!r.ok) { showToast('⚠ Promote failed: ' + (d.error || 'unknown'), 'error');
+            row.removeAttribute('data-promoting'); row.style.opacity = '1';
+            if (btn) { btn.textContent = '▲ Promote'; btn.disabled = false; } return; }
+        // build the full card and move it into the Top-5 list (checked = in the publish set)
+        const wrap = document.createElement('div');
+        wrap.innerHTML = buildFullCard(id, d);
+        const card = wrap.firstElementChild;
+        mainList.appendChild(card);
+        row.remove();                                   // drop the compact bench row
+        updateAddBullet(id);
+        armVerify(); updateCount();
+        showToast(fromAuto ? 'Bench item authored & promoted — verify before publish' : 'Promoted & authored — full preview ready', 'success');
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (e) {
+        showToast('Network error during promote', 'error');
+        row.removeAttribute('data-promoting'); row.style.opacity = '1';
+        if (btn) { btn.textContent = '▲ Promote'; btn.disabled = false; }
+    }
+}
+
+// Full top-5-style card HTML for a promoted item (mirrors the Jinja main-item template;
+// same element IDs so the existing edit/category/depth/approve/reject handlers just work).
+function buildFullCard(id, d) {
+    const depth = (d.depth || 'standard');
+    const esc = escapeHtml;
+    const opts = CATEGORIES.map(c =>
+        `<option value="${esc(c)}" ${c === d.category ? 'selected' : ''}>${esc(c)}</option>`).join('');
+    const bullets = (d.bullets || []).map((b, i) =>
+        `<li class="bullet" data-idx="${i}"><span class="dot">•</span>
+         <span class="btxt" id="bul-text-${id}-${i}">${esc(b)}</span>
+         <button type="button" class="edit-btn" onclick="openBullet('${id}',${i})" title="Edit bullet">✏️</button>
+         <div class="edit-wrap" id="bul-edit-${id}-${i}" style="flex-basis:100%">
+           <textarea class="edit-input" rows="2">${esc(b)}</textarea>
+           <div class="edit-actions">
+             <button type="button" class="mini-btn mini-save" onclick="saveBullet('${id}',${i})">Save ✓</button>
+             <button type="button" class="mini-btn mini-cancel" onclick="cancelBullet('${id}',${i})">Cancel</button>
+             <button type="button" class="mini-btn mini-cancel" style="background:#fff1f2;color:#b91c1c" onclick="deleteBullet('${id}',${i})">Delete</button>
+           </div></div></li>`).join('');
+    const vflag = d.needs_verify ? `<span class="verify-flag" title="Model was unsure of a number/date/name — check before publishing">⚠ VERIFY</span>` : '';
+    const title = esc(d.title || ''), hook = esc(d.summary || ''), angle = esc(d.rpsc_angle || '—');
+    return `
+    <div class="item is-promoted depth-${depth}" data-section="main" data-id="${id}" data-depth="${depth}">
+      <input type="checkbox" name="selected_ids" value="${id}" checked style="display:none"
+             class="sel-check main-check" data-id="${id}" data-title="${title}"
+             data-category="${esc(d.category || '')}" data-topic="" data-summary="${hook}">
+      <div class="card-head">
+        <span class="depth-badge depth-${depth}" id="depthbadge-${id}">${depth}</span>
+        ${vflag}
+        <span class="approved-badge">✓ Approved</span>
+        <span class="promoted-flag">▲ Promoted from bench</span>
+      </div>
+      <div class="cat-row">
+        <select class="cat-select" data-id="${id}" onchange="changeCategory('${id}', this)">${opts}</select>
+      </div>
+      <div class="fld">
+        <div class="fld-head">
+          <div class="item-title-text" id="title-text-${id}">${title}</div>
+          <button type="button" class="edit-btn" onclick="openEdit('title','${id}')" title="Edit title">✏️</button>
+          <span class="saved-flash" id="flash-title-${id}">Saved ✓</span>
+        </div>
+        <div class="edit-wrap" id="title-edit-${id}"><textarea class="edit-input" rows="2">${title}</textarea>
+          <div class="edit-actions"><button type="button" class="mini-btn mini-save" onclick="saveEdit('title','${id}')">Save ✓</button>
+          <button type="button" class="mini-btn mini-cancel" onclick="cancelEdit('title','${id}')">Cancel</button></div></div>
+      </div>
+      <div class="fld">
+        <div class="fld-head">
+          <div class="item-hook-text" id="summary-text-${id}">${hook}</div>
+          <button type="button" class="edit-btn" onclick="openEdit('summary','${id}')" title="Edit hook">✏️</button>
+          <span class="saved-flash" id="flash-summary-${id}">Saved ✓</span>
+        </div>
+        <div class="edit-wrap" id="summary-edit-${id}"><textarea class="edit-input" rows="3">${hook}</textarea>
+          <div class="edit-actions"><button type="button" class="mini-btn mini-save" onclick="saveEdit('summary','${id}')">Save ✓</button>
+          <button type="button" class="mini-btn mini-cancel" onclick="cancelEdit('summary','${id}')">Cancel</button></div></div>
+      </div>
+      <ul class="bullets" id="bullets-${id}">${bullets}</ul>
+      <button type="button" class="add-bullet" id="addbul-${id}" onclick="addBullet('${id}')">+ Add bullet</button>
+      <div class="angle-box">
+        <div class="angle-head"><span class="angle-label">RPSC can ask</span>
+          <button type="button" class="edit-btn" onclick="openEdit('rpsc_angle','${id}')" title="Edit RPSC angle">✏️</button>
+          <span class="saved-flash" id="flash-rpsc_angle-${id}">Saved ✓</span>
+        </div>
+        <div class="angle-text" id="rpsc_angle-text-${id}">${angle}</div>
+        <div class="edit-wrap" id="rpsc_angle-edit-${id}"><textarea class="edit-input" rows="3">${esc(d.rpsc_angle || '')}</textarea>
+          <div class="edit-actions"><button type="button" class="mini-btn mini-save" onclick="saveEdit('rpsc_angle','${id}')">Save ✓</button>
+          <button type="button" class="mini-btn mini-cancel" onclick="cancelEdit('rpsc_angle','${id}')">Cancel</button></div></div>
+      </div>
+      <div class="section-hint" style="margin-top:10px">No MCQs yet — generated in the daily MCQ run after publish.</div>
+      <div class="depth-row">
+        <label>Depth:</label>
+        <select class="depth-select" data-id="${id}" onchange="changeDepth('${id}', this)">
+          <option value="standard" ${depth==='standard'?'selected':''}>Standard (5)</option>
+          <option value="important" ${depth==='important'?'selected':''}>Important (7)</option>
+          <option value="landmark" ${depth==='landmark'?'selected':''}>Landmark (8–12)</option>
+        </select>
+        <span class="regen-spinner" id="regen-${id}">⏳ Regenerating…</span>
+      </div>
+      <div class="item-actions">
+        <button type="button" class="btn-approve-item" onclick="approveItem('${id}')">✓ Approve</button>
+        <button type="button" class="btn-reject-item" onclick="openReject('${id}')">✗ Reject</button>
+      </div>
+    </div>`;
 }
 
 // ── shared POST helper ───────────────────────────────────────────────────────
