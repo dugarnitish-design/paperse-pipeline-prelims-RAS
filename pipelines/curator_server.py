@@ -484,6 +484,11 @@ def _publish(date_str: str) -> bool:
         except Exception as e:
             C.log(f"  ⚠ PDF re-upload after publish failed (non-fatal): {e}")
         _post_pyq_polls(date_str)        # PDF first, polls immediately after
+        try:                              # §5C — record topic coverage on publish
+            from pipelines.daily_ca_pipeline import record_topic_coverage
+            record_topic_coverage(date_str)
+        except Exception as e:
+            C.log(f"  ⚠ coverage update failed (non-fatal): {e}")
         return True
     else:
         C.log(f"  ✗ Publish failed:\n{result.stderr[-300:]}")

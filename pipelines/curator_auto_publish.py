@@ -98,6 +98,11 @@ def auto_publish(date_str: str) -> None:
         upload_pdfs.main(date_str)
     except Exception as e:
         C.log(f"  ⚠ PDF upload failed (non-fatal): {e}")
+    try:                              # §5C — record topic coverage on publish
+        from pipelines.daily_ca_pipeline import record_topic_coverage
+        record_topic_coverage(date_str)
+    except Exception as e:
+        C.log(f"  ⚠ coverage update failed (non-fatal): {e}")
     try:
         from pipelines.pyq_poll_bot import run_daily_pyq_polls
         C.log(f"  → Posting PYQ polls for {date_str} (after publish)")

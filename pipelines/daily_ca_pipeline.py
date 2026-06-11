@@ -1086,6 +1086,29 @@ def classify_item_type(item):
     return "also" if (also_hit and not main_hit) else "main"
 
 
+# §5A — coverage scoring boost. "Genuine new information" words suppress the
+# repeat-penalty (a fresh angle on a recently-covered topic is still worth running).
+NEW_INFO_WORDS = ("new", "revised", "amended", "increased", "extended", "launched",
+                  "passed", "enacted", "changed", "updated", "announced")
+
+def _coverage_modifier(match_text, low_text):
+    """Score delta from topic_coverage recency: never-covered +0.3, 45+d +0.1,
+    15-45d 0, 7-15d -0.2, <7d -0.5 — penalties suppressed by NEW_INFO_WORDS."""
+    _ti, cov = match_topic(match_text)
+    if not cov:
+        return 0.0
+    days = cov.get("days_since_covered", 9999) or 9999
+    if (cov.get("coverage_count") or 0) == 0 or days >= 9999:
+        return 0.3                               # never covered → boost (always)
+    if days >= 45:
+        return 0.1
+    if days >= 15:
+        return 0.0
+    if any(w in low_text for w in NEW_INFO_WORDS):
+        return 0.0                               # genuine new angle → no penalty
+    return -0.2 if days >= 7 else -0.5
+
+
 def score_item(item, cats):
     """LAYER: category_keyword_filter — SCORE ONLY (not a hard gate).
 
@@ -1097,6 +1120,8 @@ def score_item(item, cats):
     toks = tokenize(text)
     low = text.lower()
     item_raj = any(k in low for k in RAJ_KEYS)
+    # §5A coverage modifier (flat +/- applied to the final priority below).
+    cov_delta = _coverage_modifier(f"{item.get('title', '')} {low[:300]}", low)
 
     best, best_score, best_core = None, 0, 0
     for c in cats:
@@ -1144,9 +1169,10 @@ def score_item(item, cats):
             "rajasthan_angle": item_raj or bool(best.get("rajasthan_angle")),
             "static_connect": static_connect, "static_subject": best.get("static_subject"),
             "exam_ref": exam_ref,
-            "priority": round(priority * quality * tier_weight * intent_mult, 3),
+            "priority": round(priority * quality * tier_weight * intent_mult + cov_delta, 3),
             "match_score": best_score, "match_core": best_core,
             "text_quality": round(quality, 2), "intent_mult": intent_mult,
+            "coverage_delta": cov_delta,
         })
     else:
         # FIX 1 — no category matched. A flat 0.2 made every uncategorised item tie.
@@ -1159,8 +1185,9 @@ def score_item(item, cats):
         item.update({
             "category": None, "tier": 3, "rajasthan_angle": item_raj,
             "static_connect": None, "static_subject": None, "exam_ref": None,
-            "priority": round(base * quality, 3), "match_score": 0, "match_core": 0,
+            "priority": round(base * quality + cov_delta, 3), "match_score": 0, "match_core": 0,
             "text_quality": round(quality, 2), "intent_mult": 1.0,
+            "coverage_delta": cov_delta,
         })
     return item
 
@@ -1584,16 +1611,94 @@ def match_topic(text):
         return None, None
     return best, idx["coverage"].get(best["topic"])
 
+_CAT_TO_TYPE = {
+    "national schemes & governance": "1", "books, awards & personalities": "2",
+    "wildlife & environment": "3", "international politics & elections": "4",
+    "international organisations & reports": "4", "national science & technology": "5",
+    "national sports & awards": "6", "global sports & awards": "6",
+    "bills & legislation": "8", "monetary policy & rbi": "9", "world economy & trade": "9",
+}
+
 def _proxy_type(category):
     """Pre-authoring TYPE proxy from the keyword category (real news_type only arrives
-    with gen_main's reply, but depth must be decided before authoring). Only TYPE 1/8
-    matter for the depth rules."""
-    c = (category or "").lower()
+    with gen_main's reply, but depth + angle must be decided before authoring)."""
+    c = (category or "").lower().strip()
+    if c in _CAT_TO_TYPE:
+        return _CAT_TO_TYPE[c]
+    if "rajasthan" in c:
+        return "7"
     if "bill" in c or "legislation" in c:
         return "8"
     if "scheme" in c:
         return "1"
+    if "wildlife" in c or "environment" in c:
+        return "3"
     return ""
+
+# §5B — angle rotation per news type (avoids repeating the same facts on a topic).
+TYPE_ANGLES = {
+    "1": ["basics", "coverage", "performance", "comparison", "recent_change"],
+    "3": ["basics", "population", "threats", "conservation", "recent_development"],
+}
+DEFAULT_ANGLES = ["basics", "key_facts", "significance", "comparison", "recent_development"]
+
+def _first_uncovered_angle(news_type, cov):
+    """First angle not yet covered for this topic, or None (first coverage / all done
+    → no suggestion, prompt section skipped). Returns (suggested_angle, covered_list)."""
+    angles = TYPE_ANGLES.get((news_type or "").strip(), DEFAULT_ANGLES)
+    covered = (cov or {}).get("all_angles_covered") or []
+    if isinstance(covered, str):
+        try: covered = json.loads(covered)
+        except Exception: covered = []
+    if not cov:                       # first coverage / no tracking yet → no suggestion
+        return None, []
+    nxt = next((a for a in angles if a not in covered), None)
+    return nxt, covered
+
+
+def record_topic_coverage(date_str):
+    """§5C — called after a successful publish. For each published main item, mark its
+    topic covered today (coverage_count+1, recency reset, angle appended) and refresh
+    topic_intelligence.last_asked_year to the publish year if newer. No-op on no match."""
+    try:
+        mains = C.sb_select("daily_ca_items", params={
+            "date": f"eq.{date_str}", "is_main": "eq.true", "language": "eq.EN",
+            "order": "priority.desc"}) or []
+    except Exception as e:
+        C.log(f"   ⚠ coverage: could not load mains for {date_str}: {e}")
+        return
+    done = 0
+    for it in mains:
+        if (it.get("status") or "") == "rejected":
+            continue
+        _ti, _cov = match_topic(f"{(it.get('title') or '')} {it.get('summary') or ''}")
+        if not _cov:
+            continue
+        topic = _cov["topic"]
+        fresh = C.sb_select("topic_coverage", params={"topic": f"eq.{topic}", "limit": "1"})
+        cov = fresh[0] if fresh else _cov
+        covered = cov.get("all_angles_covered") or []
+        if isinstance(covered, str):
+            try: covered = json.loads(covered)
+            except Exception: covered = []
+        angle = _first_uncovered_angle(_proxy_type(it.get("category")), cov)[0]
+        if angle and angle not in covered:
+            covered.append(angle)
+        try:
+            C.sb_update("topic_coverage", {
+                "last_covered_date": date_str,
+                "coverage_count": (cov.get("coverage_count") or 0) + 1,
+                "last_angle_covered": angle,
+                "all_angles_covered": covered,
+                "days_since_covered": 0,
+                "is_overdue": False,
+            }, {"topic": topic})
+            done += 1
+        except Exception as e:
+            C.log(f"   ⚠ coverage update failed for {topic[:30]}: {e}")
+        # NOTE: topic_intelligence.last_asked_year is EXAM TRUTH (set from PYQ data) and
+        # is deliberately NOT bumped on coverage — recency lives in topic_coverage.
+    C.log(f"   ✓ §5C topic_coverage updated for {done} published item(s)")
 
 def detect_depth(news_type, score, ti, cov):
     """standard (5) / important (7) / landmark (∞) — drives the bullet count (honored
@@ -1637,21 +1742,28 @@ def _group_key(it):
     return f"{it.get('source', '')}|{(it.get('title') or '').replace('**', '')[:120]}"
 
 
-def gen_main(item, lang, depth="standard"):
+def gen_main(item, lang, depth="standard", suggested_angle=None, prev_angles=None):
     """Judge (STEP 1) + author (STEP 2) one item in `lang`. Returns the model's dict:
     {verdict, reason, item_type, needs_verify, summary, bullets, rpsc_angle}. `title`
     is injected from the news item (the prompt emits no title). A verdict of NO means
     the caller should DROP this item and backfill from the bench — Layer 3 already
     pre-filtered, this is the stricter final 'would RPSC set an MCQ?' gate.
     `depth` (standard/important/landmark) sets the target bullet count; the SYS_EN
-    DEPTH RULE (§10) defines 5 / 7 / as-many-as-needed."""
+    DEPTH RULE (§10) defines 5 / 7 / as-many-as-needed. `suggested_angle` (§5B) steers
+    a fresh angle on already-covered topics (skipped entirely when None)."""
     sysmsg = SYS_EN if lang == "EN" else SYS_HI
     lang_word = "English" if lang == "EN" else "Hindi (Devanagari, freshly authored, not translated)"
     depth_n = {"standard": "exactly 5", "important": "exactly 7",
                "landmark": "as many as needed (8-12)"}.get(depth, "exactly 5")
+    angle_block = ""
+    if suggested_angle:
+        angle_block = (f"Cover this specific angle: {suggested_angle}\n"
+                       f"Previous angles already covered: {prev_angles or []}\n"
+                       "Do NOT repeat information from previous coverage. New information only.\n\n")
     user = (f"News item ({item['source']}): {item['text']}\n"
             f"Category: {item.get('category')}.\n"
-            f"DEPTH: {depth} → write {depth_n} bullets (follow the SYS_EN DEPTH RULE).\n\n"
+            f"DEPTH: {depth} → write {depth_n} bullets (follow the SYS_EN DEPTH RULE).\n"
+            f"{angle_block}"
             f"Apply STEP 1 (MCQ test). If YES/MAYBE, write the {lang_word} content per the matching "
             f"TYPE format (bullet 1 = the news fact, the rest from your own knowledge). "
             f"Return ONLY JSON:\n"
@@ -1992,16 +2104,21 @@ def main(news_date, label_date, dry_run=False):
         # isn't known yet (it comes with gen_main's reply), so use a keyword-category proxy.
         ti_row, cov_row = match_topic(f"{it.get('title', '')} {(it.get('text') or '')[:200]}")
         score = it.get("final_priority_score", it.get("priority", 0.5))
-        depth = detect_depth(_proxy_type(it.get("category")), score, ti_row, cov_row)
-        C.log(f"   • main {len(main_rows_inserted) + 1}/5 [{depth}]: {it.get('category')} …")
-        en = gen_main(it, "EN", depth)
+        proxy = _proxy_type(it.get("category"))
+        depth = detect_depth(proxy, score, ti_row, cov_row)
+        angle, prev_angles = _first_uncovered_angle(proxy, cov_row)   # §5B
+        it["_topic"] = (ti_row or {}).get("topic")                    # for §5C coverage update
+        it["_suggested_angle"] = angle
+        C.log(f"   • main {len(main_rows_inserted) + 1}/5 [{depth}"
+              f"{'/' + angle if angle else ''}]: {it.get('category')} …")
+        en = gen_main(it, "EN", depth, angle, prev_angles)
         if en["verdict"] == "NO":
             C.log(f"     ⤫ author-gate dropped: {(it.get('title') or '')[:45]} — {en.get('reason', '')[:60]}")
             if bi < len(bench):                       # backfill with the next bench item
                 nxt = bench[bi]; bi += 1
                 bench_used.add(id(nxt)); queue.append(nxt)
             continue
-        hi = gen_main(it, "HI", depth)
+        hi = gen_main(it, "HI", depth, angle, prev_angles)
         needs_verify = bool(en.get("needs_verify") or hi.get("needs_verify"))
         # Category from the detected news_type (overrides the loose keyword scorer).
         # Pass title+summary so TYPE 7 picks the right Rajasthan sub-category.
