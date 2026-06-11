@@ -392,8 +392,22 @@ def reject_item(date):
         item_id=data.get("id"),     # FIX 7: dashboard already sends the item id
         session_id=date,            # FIX 7: one RAG write per item per draft (date)
     )
+    # FIX: a rejected item must not leave its MCQs behind for students — delete them now.
+    iid = data.get("id")
+    mcq_deleted = 0
+    if iid:
+        try:
+            existing = C.sb_select("daily_mcqs", select="id",
+                                   params={"source_item_id": f"eq.{iid}", "limit": "50"}) or []
+            for m in existing:
+                C.sb_delete("daily_mcqs", {"id": str(m["id"])})
+            mcq_deleted = len(existing)
+            if mcq_deleted:
+                C.log(f"  ✓ deleted {mcq_deleted} MCQ(s) for rejected item {iid}")
+        except Exception as e:
+            C.log(f"  ⚠ MCQ delete for rejected item {iid} failed (non-fatal): {e}")
     C.log(f"  ✓ immediate reject learned: {(data.get('title') or '')[:40]} · {reason}")
-    return jsonify({"ok": True, "learning": result}), 200
+    return jsonify({"ok": True, "learning": result, "mcqs_deleted": mcq_deleted}), 200
 
 
 @app.route("/curator/<date>/approve", methods=["POST"])

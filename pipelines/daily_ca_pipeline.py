@@ -1420,11 +1420,15 @@ DEFAULT — if no type fits:
 Ask yourself: what MCQ would RPSC set from this? Write bullets that answer that question —
 5 for standard, 7 for important, as many as needed for landmark.
 
-RPSC ANGLE RULES:
-Format: "RPSC can ask: Q1: [question]? / Q2: [question]? / Q3: [question]?"
-For landmark items add Q4 and Q5.
-TYPE 1 ONLY: ask full name / year / ministry / provision — NEVER which state joined/resumed or recent events.
-All types: ask STABLE facts valid next year too, never a volatile news event.
+KEY FACTS TO REMEMBER (rpsc_angle) — NOT questions:
+rpsc_angle is a MEMORY BOX, not questions. Output the 3-5 MOST testable facts for this
+topic, separated by " · " — the exact facts RPSC tests (names, years, numbers, ministries,
+ranks, provisions) so a student memorises them while reading.
+Example: "Ministry of MSME · Launched 2023 · 18 traditional trades · ₹13,000 crore · Three pillars: Samman Samarthya Samriddhi"
+3-4 facts for standard/important, up to 5 for landmark. STABLE facts only — never a volatile
+news event (which state joined/resumed, this week's change). TYPE 1 (schemes): prefer full
+name · launch year · ministry · key provision · unique feature.
+Do NOT write the words "Key facts to remember" or any question — output only the facts joined by " · ".
 
 ACCURACY RULE:
 If unsure of any number/date/name → set needs_verify=true (use the flag; never write "(verify)" inline).
@@ -1435,7 +1439,7 @@ STRICT RULES:
 - Bold exactly ONE key testable fact per bullet with **double asterisks**
 - standard bullets: maximum 20 words each
 - important/landmark bullets: maximum 25 words each
-- RPSC angle: maximum 2 lines (3 for landmark)
+- Key facts (rpsc_angle): 3-5 facts separated by " · ", no questions, no header word
 - Never mention political parties or use political framing
 - Use your own knowledge plus the article; connect new schemes to familiar ones
 - No padding or repetition
@@ -1592,11 +1596,13 @@ B5: भारत की वैश्विक स्थिति या तु�
 स्वयं से पूछें: इससे RPSC कौन-सा MCQ बनाएगा? उसी का उत्तर देने वाले बुलेट लिखें —
 standard हेतु 5, important हेतु 7, landmark हेतु जितने आवश्यक हों।
 
-RPSC ANGLE नियम:
-प्रारूप: "RPSC पूछ सकता है: Q1: प्रश्न? / Q2: प्रश्न? / Q3: प्रश्न?"
-landmark आइटम के लिए Q4 व Q5 जोड़ें।
-केवल प्रकार 1: पूरा नाम / वर्ष / मंत्रालय / प्रावधान पूछें — कभी कौन-सा राज्य जुड़ा/पुनः आरंभ या हाल की घटनाएँ नहीं।
-सभी प्रकार: केवल स्थिर तथ्य जो अगले वर्ष भी वैध हों, कभी अस्थिर समाचार-घटना नहीं।
+याद रखने योग्य तथ्य (rpsc_angle) — प्रश्न नहीं:
+rpsc_angle अब प्रश्न नहीं, एक मेमोरी बॉक्स है। इस विषय के 3-5 सबसे परीक्षा-योग्य तथ्य " · " से अलग
+करके दें — नाम, वर्ष, संख्या, मंत्रालय, रैंक, प्रावधान — वही तथ्य जो RPSC पूछता है, ताकि छात्र पढ़ते-पढ़ते याद कर ले।
+उदाहरण: "MSME मंत्रालय · 2023 में आरंभ · 18 पारंपरिक व्यवसाय · ₹13,000 करोड़ · तीन स्तंभ: सम्मान सामर्थ्य समृद्धि"
+standard/important हेतु 3-4 तथ्य, landmark हेतु 5 तक। केवल स्थिर तथ्य — कभी अस्थिर समाचार-घटना नहीं।
+प्रकार 1 (योजना): पूरा नाम · आरंभ वर्ष · मंत्रालय · मुख्य प्रावधान · विशिष्टता।
+"याद रखने योग्य तथ्य" शब्द या कोई प्रश्न न लिखें — केवल तथ्य " · " से अलग करके दें।
 
 सटीकता नियम:
 किसी संख्या/तिथि/नाम के प्रति अनिश्चित हों → needs_verify=true रखें (फ्लैग उपयोग करें; "(verify)" इनलाइन कभी न लिखें)।
@@ -1607,7 +1613,7 @@ landmark आइटम के लिए Q4 व Q5 जोड़ें।
 - प्रति बुलेट ठीक एक मुख्य परीक्षा-योग्य तथ्य **डबल एस्टरिस्क** से बोल्ड करें
 - standard बुलेट: प्रत्येक अधिकतम 20 शब्द
 - important/landmark बुलेट: प्रत्येक अधिकतम 25 शब्द
-- RPSC angle: अधिकतम 2 पंक्तियाँ (landmark हेतु 3)
+- मुख्य तथ्य (rpsc_angle): 3-5 तथ्य " · " से अलग, कोई प्रश्न नहीं, कोई शीर्षक शब्द नहीं
 - कभी राजनीतिक दल या राजनीतिक फ्रेमिंग नहीं
 - अपने ज्ञान + लेख का उपयोग करें; नई योजनाओं को परिचित योजनाओं से जोड़ें
 - कोई पैडिंग या पुनरावृत्ति नहीं
@@ -1941,8 +1947,8 @@ def _intel_block(ti):
             f"RPSC tests these facts: {_lst(ti.get('what_rpsc_tests'))}\n"
             f"RPSC never tests: {_lst(ti.get('what_rpsc_never_tests'))}\n"
             f"Typical question types: {_lst(ti.get('typical_question_types'))}\n"
-            "Your bullets MUST cover the tested facts above. Your RPSC Angle MUST ask about "
-            "tested facts only. Never write about never-tested facts.\n\n")
+            "Your bullets MUST cover the tested facts above. Your Key Facts line (rpsc_angle) "
+            "MUST list these tested facts only. Never write about never-tested facts.\n\n")
 
 def _rag_examples(category, depth=None, n=2):
     """§7A — most recently curator-APPROVED content_rag rows that match this item, used
@@ -2017,7 +2023,9 @@ def gen_main(item, lang, depth="standard", suggested_angle=None, prev_angles=Non
             '"summary": "one line why in news today (null if verdict NO)", '
             f'"bullets": ["{depth_n} bullets, key facts wrapped in **double asterisks** '
             '(null if verdict NO)"], '
-            '"rpsc_angle": "RPSC can ask: Q1: ...? / Q2: ...? / Q3: ...?  (null if verdict NO)"}')
+            '"rpsc_angle": "the 3-5 most testable facts joined by  ·  (e.g. Ministry of MSME · '
+            'Launched 2023 · 18 trades · Rs 13,000 crore), NOT questions, no header word '
+            '(null if verdict NO)"}')
     data, _ = C.claude_json(sysmsg, user, max_tokens=1200, cache_system=True)  # cache SYS_EN/SYS_HI
     data["bullets"] = data.get("bullets") or []
     data["rpsc_angle"] = data.get("rpsc_angle") or ""
