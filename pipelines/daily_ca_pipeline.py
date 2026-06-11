@@ -1741,6 +1741,69 @@ def record_topic_coverage(date_str):
         # is deliberately NOT bumped on coverage — recency lives in topic_coverage.
     C.log(f"   ✓ §5C topic_coverage updated for {done} published item(s)")
 
+
+def record_content_rag(date_str):
+    """§7B — after a successful publish, store every curator-APPROVED published item as a
+    content_rag exemplar (the self-improving 'curator standard' that §7A feeds back into
+    gen_main). final_* = the published (curator-final) version; original_* = the
+    pre-curation draft version when recoverable, so was_edited/edit_count capture what the
+    curator changed. jsonb columns get raw Python lists. Idempotent on (date, item_id)."""
+    try:
+        items = C.sb_select("daily_ca_items", select="*", params={
+            "date": f"eq.{date_str}", "language": "eq.EN",
+            "status": "eq.published", "is_main": "eq.true", "limit": "12"}) or []
+    except Exception as e:
+        C.log(f"   ⚠ content_rag: could not load published items for {date_str}: {e}")
+        return 0
+    if not items:
+        C.log("   ⚠ content_rag: no published items to record"); return 0
+
+    # Originals from the pre-curation draft snapshot (keyed by item id) → edit detection.
+    orig_by_id = {}
+    try:
+        from pipelines.curator_workflow import load_draft
+        for o in ((load_draft(date_str) or {}).get("items") or []):
+            oid = str(o.get("id") or "")
+            if oid:
+                orig_by_id[oid] = o
+    except Exception:
+        pass
+
+    def _aslist(v):
+        if isinstance(v, str):
+            try: return json.loads(v)
+            except Exception: return []
+        return v or []
+
+    rows, now = [], datetime.datetime.utcnow().isoformat() + "Z"
+    for it in items:
+        iid = str(it.get("id") or "")
+        cat = it.get("category") or ""
+        fb, fa = _aslist(it.get("bullets")), (it.get("rpsc_angle") or "")
+        ftitle = it.get("title") or ""
+        o = orig_by_id.get(iid, {})
+        ob = _aslist(o.get("bullets")) if o.get("bullets") is not None else fb
+        oa = o.get("rpsc_angle") if o.get("rpsc_angle") is not None else fa
+        ot = (o.get("title") or o.get("title_en")) if o else None
+        edited = bool(o) and ((ot is not None and ot != ftitle) or ob != fb or oa != fa)
+        rows.append({
+            "date": date_str, "item_id": iid or None,
+            "news_type": _proxy_type(cat), "category": cat,
+            "depth": it.get("depth") or "standard",
+            "item_title": ftitle, "hook": it.get("summary") or "",
+            "original_bullets": ob, "final_bullets": fb,
+            "original_rpsc_angle": oa, "final_rpsc_angle": fa,
+            "was_edited": edited, "edit_count": 1 if edited else 0,
+            "approved_at": now,
+        })
+    try:
+        C.sb_upsert("content_rag", rows, on_conflict="date,item_id")
+        C.log(f"   ✓ §7B content_rag: recorded {len(rows)} approved exemplar(s) "
+              f"({sum(1 for r in rows if r['was_edited'])} edited)")
+    except Exception as e:
+        C.log(f"   ⚠ content_rag upsert failed: {e}")
+    return len(rows)
+
 def detect_depth(news_type, score, ti, cov):
     """standard (5) / important (7) / landmark (∞) — drives the bullet count (honored
     by SYS_EN in §10). Uses score + topic_intelligence + topic_coverage."""
@@ -1801,6 +1864,44 @@ def _intel_block(ti):
             "Your bullets MUST cover the tested facts above. Your RPSC Angle MUST ask about "
             "tested facts only. Never write about never-tested facts.\n\n")
 
+def _rag_examples(category, depth=None, n=2):
+    """§7A — most recently curator-APPROVED content_rag rows that match this item, used
+    as style/quality exemplars. Same category first; if none, fall back to same depth.
+    Returns up to n rows (newest first). Empty list on day 1 → block becomes a no-op."""
+    try:
+        rows = C.sb_select("content_rag", select="item_title,final_bullets,final_rpsc_angle,depth,category",
+                           params={"category": f"eq.{category}", "order": "approved_at.desc.nullslast",
+                                   "limit": str(n)}) or []
+        if not rows and depth:
+            rows = C.sb_select("content_rag", select="item_title,final_bullets,final_rpsc_angle,depth,category",
+                               params={"depth": f"eq.{depth}", "order": "approved_at.desc.nullslast",
+                                       "limit": str(n)}) or []
+        return rows
+    except Exception as e:
+        C.log(f"   ⚠ rag lookup failed: {e}")
+        return []
+
+
+def _rag_block(category, depth=None, n=2):
+    """§7A — format curator-approved exemplars into a prompt block (skipped if none)."""
+    rows = _rag_examples(category, depth, n)
+    if not rows:
+        return ""
+    def _bul(v):
+        if isinstance(v, str):
+            try: v = json.loads(v)
+            except Exception: v = []
+        return "\n".join(f"  - {str(b)}" for b in (v or [])[:12])
+    blocks = []
+    for r in rows:
+        blocks.append(f"Example — {r.get('item_title','')} [{r.get('depth') or 'standard'}]:\n"
+                      f"{_bul(r.get('final_bullets'))}\n"
+                      f"  RPSC Angle: {r.get('final_rpsc_angle') or ''}")
+    return ("CURATOR-APPROVED EXAMPLES — match this exact style, factual density and angle "
+            "format (these passed the curator; do NOT copy their content, copy their standard):\n"
+            + "\n\n".join(blocks) + "\n\n")
+
+
 def gen_main(item, lang, depth="standard", suggested_angle=None, prev_angles=None, topic_intel=None):
     """Judge (STEP 1) + author (STEP 2) one item in `lang`. Returns the model's dict:
     {verdict, reason, item_type, needs_verify, summary, bullets, rpsc_angle}. `title`
@@ -1820,6 +1921,7 @@ def gen_main(item, lang, depth="standard", suggested_angle=None, prev_angles=Non
                        f"Previous angles already covered: {prev_angles or []}\n"
                        "Do NOT repeat information from previous coverage. New information only.\n\n")
     user = (f"{_intel_block(topic_intel)}"
+            f"{_rag_block(item.get('category'), depth)}"
             f"News item ({item['source']}): {item['text']}\n"
             f"Category: {item.get('category')}.\n"
             f"DEPTH: {depth} → write {depth_n} bullets (follow the SYS_EN DEPTH RULE).\n"

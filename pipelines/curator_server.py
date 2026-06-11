@@ -489,6 +489,11 @@ def _publish(date_str: str) -> bool:
             record_topic_coverage(date_str)
         except Exception as e:
             C.log(f"  ⚠ coverage update failed (non-fatal): {e}")
+        try:                              # §7B — learn the curator standard into content_rag
+            from pipelines.daily_ca_pipeline import record_content_rag
+            record_content_rag(date_str)
+        except Exception as e:
+            C.log(f"  ⚠ content_rag update failed (non-fatal): {e}")
         return True
     else:
         C.log(f"  ✗ Publish failed:\n{result.stderr[-300:]}")

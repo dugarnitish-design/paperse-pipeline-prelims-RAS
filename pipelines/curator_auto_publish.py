@@ -103,6 +103,11 @@ def auto_publish(date_str: str) -> None:
         record_topic_coverage(date_str)
     except Exception as e:
         C.log(f"  ⚠ coverage update failed (non-fatal): {e}")
+    try:                              # §7B — learn the curator standard into content_rag
+        from pipelines.daily_ca_pipeline import record_content_rag
+        record_content_rag(date_str)
+    except Exception as e:
+        C.log(f"  ⚠ content_rag update failed (non-fatal): {e}")
     try:
         from pipelines.pyq_poll_bot import run_daily_pyq_polls
         C.log(f"  → Posting PYQ polls for {date_str} (after publish)")
