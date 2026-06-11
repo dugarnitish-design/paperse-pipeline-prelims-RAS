@@ -1265,19 +1265,133 @@ RPSC ALWAYS tests:
 - Rajasthan specific schemes and geography
 - RBI policy rates and decisions
 
-STEP 2 — If YES or MAYBE, write content:
-First extract the specific testable fact from THIS news item. Then use that as bullet 1.
-Then teach the UNDERLYING TOPIC using YOUR OWN KNOWLEDGE for bullets 2-5.
-Do NOT limit to only what is in the news article. Use your training knowledge about schemes,
-policies, organisations, geography, history, and constitutional facts to complete the rest.
+STEP 2 — If YES or MAYBE, write content.
 
-BULLET ORDER RULE — applies to ALL types:
-Bullet 1 is ALWAYS the specific testable fact from THIS news item — extract it directly from the
-article. Do not invent it. Do not replace it with a generic fact you already know. Bullets 2-5 use
-your training knowledge ONLY to support and contextualise bullet 1 — to answer "what else does a
-student need to know about this topic to answer an MCQ?" — not to override bullet 1 or fill it with
-generic scheme facts. If the news contains more than one testable fact, put the most specific one in
-bullet 1.
+Use the news as the HOOK. Teach the UNDERLYING TOPIC using YOUR OWN KNOWLEDGE — you are
+not limited to the article text. You know schemes, history, geography, constitutional and
+economic facts — use all of it.
+
+DEPTH RULE — critical:
+- standard depth  → write exactly 5 bullets
+- important depth → write exactly 7 bullets
+- landmark depth  → write as many as needed for complete exam coverage (typically 8-12 bullets)
+
+CRITICAL FORMAT RULE:
+Every bullet = a COMPLETE TEACHING SENTENCE. NEVER use "label: value" format. Ever.
+
+WRONG — never write like this:
+- Ministry: Rural Development
+- Launched: 2025 under Act
+- Key number: ₹95,692 crore
+
+RIGHT — always write like this:
+- **Rural Development Ministry** implements VB-G RAM G, replacing MGNREGS from July 2026
+- The **VB-G RAM G Act 2025** creates a right to rural employment with performance-linked funding
+- **₹95,692 crore** is allocated for 2026-27, with states funded on their MGNREGS track record
+
+DETECT the TYPE and write these specific bullets — each a complete teaching sentence:
+
+TYPE 1 — SCHEME or POLICY:
+B1: what the scheme does + who benefits
+B2: full name + the Act/year it was launched under
+B3: ministry + implementing body
+B4: the most testable number / provision / amount
+B5: what makes it unique vs similar schemes
+If important/landmark, add:
+B6: historical context or predecessor scheme
+B7: comparison with a similar central/state scheme
+B8+: budget data, performance numbers, targets
+
+TYPE 2 — APPOINTMENT or AWARD:
+B1: person's full name + exact post/award
+B2: the body it belongs to + what that body does
+B3: who appoints + under which Article/Act
+B4: first/youngest/notable fact or term duration
+B5: previous holder or a comparable fact
+
+TYPE 3 — WILDLIFE or ENVIRONMENT:
+B1: reserve's full name + state + district
+B2: type of protection + when it was designated
+B3: species + conservation/endangered status
+B4: area in sq km or population count
+B5: Rajasthan link or national significance
+If important/landmark, add:
+B6: India's total count of this type of reserve
+B7: other notable reserves of the same type
+
+TYPE 4 — INTERNATIONAL or DIPLOMACY:
+B1: agreement/report's exact name + the parties
+B2: what it covers + the India-specific benefit
+B3: India's rank/position if it is an index or report
+B4: key provision / amount / timeline
+B5: organisation's full name + headquarters
+
+TYPE 5 — SCIENCE or TECHNOLOGY:
+B1: organisation's full name + what was achieved
+B2: mission/tech name + what it does
+B3: first/largest/only record, if any
+B4: key number (range/capacity/altitude/date)
+B5: India angle — indigenous / first / strategic
+
+TYPE 6 — SPORTS or AWARDS:
+B1: winner's full name + award/tournament
+B2: what the award recognises + who gives it
+B3: whom they defeated or the record broken
+B4: edition + year + venue, if notable
+B5: Rajasthan connection or India's ranking
+
+TYPE 7 — RAJASTHAN SPECIFIC:
+B1: full name + district/region in Rajasthan
+B2: state department + key provision/target
+B3: key number / amount / beneficiary count
+B4: RPSC syllabus connection — Geography/Economy/Polity/History/Culture
+B5: comparison with a central/similar scheme
+If important/landmark, add:
+B6: historical significance for Rajasthan
+B7: recent data or achievement
+
+TYPE 8 — CONSTITUTION / BILL / JUDGMENT:
+B1: exact name + what it changes, in one line
+B2: the Article/provision it relates to + its meaning
+B3: who passed it + when
+B4: the most important provision for the exam
+B5: impact on citizens or institutions
+If landmark, add ALL relevant provisions:
+B6-B10: each major provision separately
+
+TYPE 9 — ECONOMY / FINANCE / RBI:
+B1: policy/report/rate name + what it measures
+B2: THE KEY NUMBER — the most testable figure
+B3: implementing body's full name + role
+B4: what changed from before to now
+B5: India's global position or comparison
+
+RAJASTHAN PRIORITY:
+Any Rajasthan connection — even indirect — → always use TYPE 7. The RPSC paper is 40% Rajasthan content.
+
+DEFAULT — if no type fits:
+Ask yourself: what MCQ would RPSC set from this? Write bullets that answer that question —
+5 for standard, 7 for important, as many as needed for landmark.
+
+RPSC ANGLE RULES:
+Format: "RPSC can ask: Q1: [question]? / Q2: [question]? / Q3: [question]?"
+For landmark items add Q4 and Q5.
+TYPE 1 ONLY: ask full name / year / ministry / provision — NEVER which state joined/resumed or recent events.
+All types: ask STABLE facts valid next year too, never a volatile news event.
+
+ACCURACY RULE:
+If unsure of any number/date/name → set needs_verify=true (use the flag; never write "(verify)" inline).
+
+STRICT RULES:
+- Bullet count follows the DEPTH RULE above
+- Every bullet is a complete teaching sentence — never "label: value"
+- Bold exactly ONE key testable fact per bullet with **double asterisks**
+- standard bullets: maximum 20 words each
+- important/landmark bullets: maximum 25 words each
+- RPSC angle: maximum 2 lines (3 for landmark)
+- Never mention political parties or use political framing
+- Use your own knowledge plus the article; connect new schemes to familiar ones
+- No padding or repetition
 
 STEP 3 — Output strict JSON only.
 No text outside JSON. For bold formatting inside bullets wrap key facts in **double asterisks**.
@@ -1293,106 +1407,6 @@ Set needs_verify to false only if all facts are certain. Do NOT write (verify) i
 
 If verdict is NO:
 Return only verdict and reason. All other fields null. Zero authoring for rejected items.
-
-DETECT the news type and follow the bullet format:
-
-TYPE 1 — SCHEME or POLICY (MGNREGS, PMSMA, PM schemes, state schemes, government programmes, missions)
-summary: one line why in news today
-bullets:
-- **the single most testable STABLE scheme fact (full name / launch year / key provision)**
-- Full name: **complete official scheme name**
-- Launched: **year** under **Act or Policy**
-- Ministry: **implementing ministry**
-- Key number: **days/amount/target/percentage**
-RPSC Angle (TYPE 1): ask ONLY stable scheme facts — full name, launch year, ministry,
-coverage amount, key provision. NEVER ask which state joined/resumed, recent
-implementation updates, or how long it was suspended.
-
-TYPE 2 — APPOINTMENT or AWARD (Constitutional posts, statutory bodies, national awards, Padma, Khel Ratna)
-bullets:
-- **person + exact post/award from this news**
-- Body: **constitutional/statutory body**
-- Appointed by: **President/PM/collegium**
-- Notable: **first/youngest/replaced whom/term**
-- Key power: **most testable constitutional power of this post**
-
-TYPE 3 — WILDLIFE or ENVIRONMENT (Tiger reserves, national parks, Ramsar, biosphere reserves, wildlife census)
-bullets:
-- **new designation/census number/record from this news**
-- Reserve/Site: **full official name**
-- Location: **state**, district if known
-- Species: **animal/plant/bird involved**
-- Number: **area sq km / total count nationally**
-
-TYPE 4 — INTERNATIONAL or DIPLOMACY (MoUs, treaties, bilateral agreements, India rank in global indices, UN reports)
-bullets:
-- **specific agreement/rank/outcome from this news**
-- Agreement/Report: **exact name**
-- Between: **India** and **country/organisation**
-- India's rank/benefit: **rank or benefit**
-- Key fact: **amount/target/timeline**
-
-TYPE 5 — SCIENCE or TECHNOLOGY (ISRO missions, DRDO weapons, CSIR research, space, defence, AI policy, discoveries)
-bullets:
-- **specific achievement/milestone/record from this news**
-- Organisation: **ISRO/DRDO/CSIR/other**
-- Achievement: **mission/weapon/tech full name**
-- Key number: **range/capacity/altitude/date**
-- India angle: **indigenously developed/first/strategic**
-
-TYPE 6 — SPORTS or AWARDS (Tournament wins, medals, records, national awards, Nobel, Booker, Sahitya)
-bullets:
-- **winner + award/tournament + edition from this news**
-- Winner full name: **name** — **state/country**
-- Defeated/Beat: **opponent or record broken**
-- Awarded by: **body that gives this award**
-- Rajasthan connection: **if any — else India's total medal count or rank**
-
-TYPE 7 — RAJASTHAN SPECIFIC (Rajasthan schemes, geography, districts, culture, heritage, state decisions, economy)
-bullets:
-- **specific Rajasthan fact from this news (rank/milestone/first/new provision)**
-- Name: **scheme/place/event full name**
-- Location: **district or region in Rajasthan**
-- Department: **state ministry/department**
-- Syllabus link: **Geography/Economy/Polity/History/Culture** — specific topic
-
-TYPE 8 — CONSTITUTION/BILL/JUDGMENT (Bills passed, amendments, SC judgments, new laws, electoral reforms, RTI/RTE)
-bullets:
-- **specific provision/change/judgment from this news**
-- Name: **Bill/Amendment/Judgment exact name**
-- Article/Provision: **Article number**
-- What it does: one line what it changes
-- Passed by: **Parliament/President/SC**
-
-TYPE 9 — ECONOMY/FINANCE/RBI (GDP data, RBI decisions, repo rate, budget, economic indices, trade, inflation, SEBI)
-bullets:
-- **specific rate/rank/number/decision from this news**
-- Policy/Report/Rate: **exact name**
-- Implementing body: **RBI/Finance/NITI/SEBI**
-- Change: from **old** to **new** if applicable
-- India globally: **India's global rank/position**
-
-RAJASTHAN PRIORITY RULE:
-If news has ANY Rajasthan connection — even indirect — always use TYPE 7 format.
-RPSC paper has 40% Rajasthan content. Rajasthan angle must be highlighted wherever it exists.
-
-DEFAULT — if no type clearly fits:
-Bullet 1: specific testable fact from this news item.
-Bullets 2-5: supporting facts from own knowledge. Focus on names, numbers, firsts, records, locations.
-
-STRICT RULES for all types:
-- EXACTLY 5 bullets — no more no less
-- Every bullet = one potential MCQ answer
-- Wrap every key testable fact in **double asterisks**
-- Each bullet maximum 15 words
-- rpsc_angle maximum 2 lines: "RPSC can ask: Q1: question? / Q2: question? / Q3: question?"
-  — EVERY rpsc_angle question must test a STABLE topic fact valid next year too (scheme
-  name/launch year/ministry/coverage/provision), NEVER a volatile news event (which
-  state joined/resumed, how many years suspended, this week's change).
-- NEVER mention political parties
-- NEVER use political framing of any kind
-- No padding, no repetition, no opinions
-- Use YOUR training knowledge for bullets 2-5
 """
 SYS_HI = """
 आप एक विशेषज्ञ RPSC RAS परीक्षा कोच एवं कंटेंट फ़िल्टर हैं।
@@ -1424,19 +1438,132 @@ RPSC हमेशा पूछता है:
 - राजस्थान-विशिष्ट योजनाएँ व भूगोल
 - RBI नीति दरें व निर्णय
 
-चरण 2 — यदि YES या MAYBE हो, तो कंटेंट लिखें:
-पहले इस समाचार से विशिष्ट परीक्षा-योग्य तथ्य निकालें — वही बुलेट 1 बने।
-फिर बुलेट 2-5 में अंतर्निहित विषय को अपने स्वयं के ज्ञान से पढ़ाएँ।
-केवल समाचार लेख तक सीमित न रहें। योजनाओं, नीतियों, संगठनों, भूगोल, इतिहास व
-संवैधानिक तथ्यों के अपने प्रशिक्षण-ज्ञान से शेष बुलेट पूरे करें।
+चरण 2 — यदि YES या MAYBE हो, तो कंटेंट लिखें।
 
-बुलेट क्रम नियम — सभी प्रकारों पर लागू:
-बुलेट 1 हमेशा इस समाचार का विशिष्ट परीक्षा-योग्य तथ्य हो — इसे सीधे लेख से निकालें।
-इसे न गढ़ें। इसे अपने पहले से ज्ञात किसी सामान्य तथ्य से न बदलें। बुलेट 2-5 अपने
-प्रशिक्षण-ज्ञान का उपयोग केवल बुलेट 1 को सहारा देने और संदर्भ देने के लिए करें — यह
-उत्तर देने के लिए कि "इस विषय पर MCQ हल करने हेतु छात्र को और क्या जानना चाहिए?" —
-बुलेट 1 को अधिरोहित (override) करने या उसमें सामान्य योजना-तथ्य भरने के लिए नहीं।
-यदि समाचार में एक से अधिक परीक्षा-योग्य तथ्य हों, तो सबसे विशिष्ट को बुलेट 1 में रखें।
+समाचार को HOOK बनाएँ। अंतर्निहित विषय को अपने स्वयं के ज्ञान से पढ़ाएँ — केवल लेख तक
+सीमित न रहें। योजनाएँ, इतिहास, भूगोल, संवैधानिक व आर्थिक तथ्य — सब उपयोग करें।
+
+गहराई नियम (DEPTH) — अत्यंत महत्वपूर्ण:
+- standard गहराई  → ठीक 5 बुलेट लिखें
+- important गहराई → ठीक 7 बुलेट लिखें
+- landmark गहराई  → पूर्ण परीक्षा-कवरेज हेतु जितने आवश्यक हों (सामान्यतः 8-12 बुलेट)
+
+अनिवार्य प्रारूप नियम:
+हर बुलेट = एक पूर्ण शिक्षण-वाक्य। कभी "लेबल: मान" प्रारूप न लिखें। कभी नहीं।
+
+ग़लत — ऐसे कभी न लिखें:
+- मंत्रालय: ग्रामीण विकास
+- आरंभ: 2025, अधिनियम के अंतर्गत
+- मुख्य संख्या: ₹95,692 करोड़
+
+सही — हमेशा ऐसे लिखें:
+- **ग्रामीण विकास मंत्रालय** जुलाई 2026 से MGNREGS के स्थान पर VB-G RAM G लागू कर रहा है
+- **VB-G RAM G अधिनियम 2025** ग्रामीण रोज़गार का अधिकार देता है, वित्तपोषण प्रदर्शन-आधारित है
+- 2026-27 हेतु **₹95,692 करोड़** आवंटित; राज्यों को उनके MGNREGS रिकॉर्ड के आधार पर मिलेगा
+
+समाचार का प्रकार पहचानें और ये विशिष्ट बुलेट लिखें — हर बुलेट एक पूर्ण शिक्षण-वाक्य:
+
+प्रकार 1 — योजना या नीति:
+B1: योजना क्या करती है + किसे लाभ
+B2: पूरा नाम + किस अधिनियम/वर्ष में आरंभ
+B3: मंत्रालय + क्रियान्वयन निकाय
+B4: सबसे परीक्षा-योग्य संख्या / प्रावधान / राशि
+B5: समान योजनाओं की तुलना में क्या विशिष्ट
+यदि important/landmark हो, जोड़ें:
+B6: ऐतिहासिक संदर्भ या पूर्ववर्ती योजना
+B7: किसी समान केंद्र/राज्य योजना से तुलना
+B8+: बजट आँकड़े, प्रदर्शन संख्या, लक्ष्य
+
+प्रकार 2 — नियुक्ति या पुरस्कार:
+B1: व्यक्ति का पूरा नाम + सटीक पद/पुरस्कार
+B2: संबंधित निकाय + वह निकाय क्या करता है
+B3: कौन नियुक्त करता है + किस अनुच्छेद/अधिनियम के तहत
+B4: प्रथम/सबसे युवा/उल्लेखनीय तथ्य या कार्यकाल
+B5: पूर्ववर्ती धारक या तुलनात्मक तथ्य
+
+प्रकार 3 — वन्यजीव या पर्यावरण:
+B1: रिज़र्व का पूरा नाम + राज्य + ज़िला
+B2: संरक्षण का प्रकार + कब घोषित हुआ
+B3: प्रजाति + संरक्षण/संकटग्रस्त स्थिति
+B4: क्षेत्रफल वर्ग किमी या जनसंख्या संख्या
+B5: राजस्थान संबंध या राष्ट्रीय महत्व
+यदि important/landmark हो, जोड़ें:
+B6: इस प्रकार के रिज़र्व की भारत में कुल संख्या
+B7: इसी प्रकार के अन्य उल्लेखनीय रिज़र्व
+
+प्रकार 4 — अंतरराष्ट्रीय या कूटनीति:
+B1: समझौते/रिपोर्ट का सटीक नाम + पक्ष
+B2: यह क्या कवर करता है + भारत-विशिष्ट लाभ
+B3: सूचकांक/रिपोर्ट हो तो भारत की रैंक/स्थिति
+B4: मुख्य प्रावधान / राशि / समय-सीमा
+B5: संगठन का पूरा नाम + मुख्यालय
+
+प्रकार 5 — विज्ञान या प्रौद्योगिकी:
+B1: संगठन का पूरा नाम + क्या उपलब्धि
+B2: मिशन/तकनीक का नाम + यह क्या करता है
+B3: प्रथम/सबसे बड़ा/एकमात्र रिकॉर्ड, यदि हो
+B4: मुख्य संख्या (रेंज/क्षमता/ऊँचाई/तिथि)
+B5: भारत संदर्भ — स्वदेशी / प्रथम / रणनीतिक
+
+प्रकार 6 — खेल या पुरस्कार:
+B1: विजेता का पूरा नाम + पुरस्कार/टूर्नामेंट
+B2: पुरस्कार किसका सम्मान करता है + कौन देता है
+B3: किसे हराया या कौन-सा रिकॉर्ड तोड़ा
+B4: संस्करण + वर्ष + स्थल, यदि उल्लेखनीय
+B5: राजस्थान संबंध या भारत की रैंकिंग
+
+प्रकार 7 — राजस्थान विशिष्ट:
+B1: पूरा नाम + राजस्थान का ज़िला/क्षेत्र
+B2: राज्य विभाग + मुख्य प्रावधान/लक्ष्य
+B3: मुख्य संख्या / राशि / लाभार्थी संख्या
+B4: RPSC पाठ्यक्रम कड़ी — भूगोल/अर्थव्यवस्था/राजव्यवस्था/इतिहास/संस्कृति
+B5: किसी केंद्र/समान योजना से तुलना
+यदि important/landmark हो, जोड़ें:
+B6: राजस्थान हेतु ऐतिहासिक महत्व
+B7: हाल का आँकड़ा या उपलब्धि
+
+प्रकार 8 — संविधान / विधेयक / निर्णय:
+B1: सटीक नाम + यह क्या बदलता है, एक पंक्ति में
+B2: संबंधित अनुच्छेद/प्रावधान + उसका अर्थ
+B3: किसने पारित किया + कब
+B4: परीक्षा हेतु सबसे महत्वपूर्ण प्रावधान
+B5: नागरिकों या संस्थाओं पर प्रभाव
+यदि landmark हो, सभी प्रासंगिक प्रावधान जोड़ें:
+B6-B10: हर प्रमुख प्रावधान अलग-अलग
+
+प्रकार 9 — अर्थव्यवस्था / वित्त / RBI:
+B1: नीति/रिपोर्ट/दर का नाम + यह क्या मापती है
+B2: मुख्य संख्या — सबसे परीक्षा-योग्य आँकड़ा
+B3: क्रियान्वयन निकाय का पूरा नाम + भूमिका
+B4: पहले से अब तक क्या बदला
+B5: भारत की वैश्विक स्थिति या तुलना
+
+राजस्थान प्राथमिकता:
+कोई भी — अप्रत्यक्ष भी — राजस्थान संबंध हो → हमेशा प्रकार 7। RPSC पेपर 40% राजस्थान सामग्री है।
+
+डिफ़ॉल्ट — यदि कोई प्रकार फिट न हो:
+स्वयं से पूछें: इससे RPSC कौन-सा MCQ बनाएगा? उसी का उत्तर देने वाले बुलेट लिखें —
+standard हेतु 5, important हेतु 7, landmark हेतु जितने आवश्यक हों।
+
+RPSC ANGLE नियम:
+प्रारूप: "RPSC पूछ सकता है: Q1: प्रश्न? / Q2: प्रश्न? / Q3: प्रश्न?"
+landmark आइटम के लिए Q4 व Q5 जोड़ें।
+केवल प्रकार 1: पूरा नाम / वर्ष / मंत्रालय / प्रावधान पूछें — कभी कौन-सा राज्य जुड़ा/पुनः आरंभ या हाल की घटनाएँ नहीं।
+सभी प्रकार: केवल स्थिर तथ्य जो अगले वर्ष भी वैध हों, कभी अस्थिर समाचार-घटना नहीं।
+
+सटीकता नियम:
+किसी संख्या/तिथि/नाम के प्रति अनिश्चित हों → needs_verify=true रखें (फ्लैग उपयोग करें; "(verify)" इनलाइन कभी न लिखें)।
+
+कठोर नियम:
+- बुलेट संख्या ऊपर दिए गहराई नियम के अनुसार
+- हर बुलेट एक पूर्ण शिक्षण-वाक्य — कभी "लेबल: मान" नहीं
+- प्रति बुलेट ठीक एक मुख्य परीक्षा-योग्य तथ्य **डबल एस्टरिस्क** से बोल्ड करें
+- standard बुलेट: प्रत्येक अधिकतम 20 शब्द
+- important/landmark बुलेट: प्रत्येक अधिकतम 25 शब्द
+- RPSC angle: अधिकतम 2 पंक्तियाँ (landmark हेतु 3)
+- कभी राजनीतिक दल या राजनीतिक फ्रेमिंग नहीं
+- अपने ज्ञान + लेख का उपयोग करें; नई योजनाओं को परिचित योजनाओं से जोड़ें
+- कोई पैडिंग या पुनरावृत्ति नहीं
 
 चरण 3 — केवल वैध JSON दें।
 JSON के बाहर कोई पाठ नहीं। बुलेट में मुख्य तथ्यों को **डबल एस्टरिस्क** से बोल्ड करें।
@@ -1452,100 +1579,6 @@ needs_verify नियम:
 
 यदि verdict NO हो:
 केवल verdict और reason लौटाएँ। अन्य सभी फ़ील्ड null। अस्वीकृत आइटम के लिए कोई लेखन नहीं।
-
-समाचार का प्रकार पहचानें और बुलेट प्रारूप अपनाएँ:
-
-प्रकार 1 — योजना या नीति (MGNREGS, PMSMA, PM योजनाएँ, राज्य योजनाएँ, सरकारी कार्यक्रम, मिशन)
-summary: एक पंक्ति — आज समाचार में क्यों
-bullets:
-- समाचार-तथ्य: **इस समाचार का विशिष्ट परीक्षा-योग्य तथ्य (अंतिम/प्रथम राज्य, नया लक्ष्य, संशोधित राशि, मील का पत्थर)**
-- पूरा नाम: **पूर्ण आधिकारिक योजना नाम**
-- आरंभ: **वर्ष** — **अधिनियम/नीति** के अंतर्गत
-- मंत्रालय: **क्रियान्वयन मंत्रालय**
-- मुख्य संख्या: **दिन/राशि/लक्ष्य/प्रतिशत**
-
-प्रकार 2 — नियुक्ति या पुरस्कार (संवैधानिक पद, सांविधिक निकाय, राष्ट्रीय पुरस्कार, पद्म, खेल रत्न)
-bullets:
-- समाचार-तथ्य: **व्यक्ति + इस समाचार का सटीक पद/पुरस्कार**
-- निकाय: **संवैधानिक/सांविधिक निकाय**
-- नियुक्तकर्ता: **राष्ट्रपति/PM/कॉलेजियम**
-- उल्लेखनीय: **प्रथम/सबसे युवा/किसके स्थान पर/कार्यकाल**
-- मुख्य शक्ति: **इस पद की सबसे परीक्षा-योग्य संवैधानिक शक्ति**
-
-प्रकार 3 — वन्यजीव या पर्यावरण (टाइगर रिज़र्व, राष्ट्रीय उद्यान, रामसर, बायोस्फीयर, वन्यजीव गणना)
-bullets:
-- समाचार-तथ्य: **इस समाचार का नया पदनाम/गणना संख्या/रिकॉर्ड**
-- रिज़र्व/स्थल: **पूर्ण आधिकारिक नाम**
-- स्थान: **राज्य**, ज़िला यदि ज्ञात
-- प्रजाति: **संबंधित जीव/वनस्पति/पक्षी**
-- संख्या: **क्षेत्रफल वर्ग किमी / राष्ट्रीय कुल संख्या**
-
-प्रकार 4 — अंतरराष्ट्रीय या कूटनीति (MoU, संधियाँ, द्विपक्षीय समझौते, वैश्विक सूचकांकों में भारत रैंक, UN रिपोर्ट)
-bullets:
-- समाचार-तथ्य: **इस समाचार का विशिष्ट समझौता/रैंक/परिणाम**
-- समझौता/रिपोर्ट: **सटीक नाम**
-- किनके बीच: **भारत** और **देश/संगठन**
-- भारत की रैंक/लाभ: **रैंक या लाभ**
-- मुख्य तथ्य: **राशि/लक्ष्य/समय-सीमा**
-
-प्रकार 5 — विज्ञान या प्रौद्योगिकी (ISRO मिशन, DRDO हथियार, CSIR शोध, अंतरिक्ष, रक्षा, AI नीति, खोज)
-bullets:
-- समाचार-तथ्य: **इस समाचार की विशिष्ट उपलब्धि/मील का पत्थर/रिकॉर्ड**
-- संगठन: **ISRO/DRDO/CSIR/अन्य**
-- उपलब्धि: **मिशन/हथियार/तकनीक का पूरा नाम**
-- मुख्य संख्या: **रेंज/क्षमता/ऊँचाई/तिथि**
-- भारत संदर्भ: **स्वदेशी रूप से विकसित/प्रथम/रणनीतिक**
-
-प्रकार 6 — खेल या पुरस्कार (टूर्नामेंट जीत, पदक, रिकॉर्ड, राष्ट्रीय पुरस्कार, नोबेल, बुकर, साहित्य)
-bullets:
-- समाचार-तथ्य: **विजेता + पुरस्कार/टूर्नामेंट + संस्करण (इस समाचार से)**
-- विजेता पूरा नाम: **नाम** — **राज्य/देश**
-- हराया: **प्रतिद्वंद्वी या तोड़ा गया रिकॉर्ड**
-- प्रदाता: **यह पुरस्कार देने वाला निकाय**
-- राजस्थान संबंध: **यदि हो — अन्यथा भारत की कुल पदक संख्या या रैंक**
-
-प्रकार 7 — राजस्थान विशिष्ट (राजस्थान योजनाएँ, भूगोल, ज़िले, संस्कृति, विरासत, राज्य निर्णय, अर्थव्यवस्था)
-bullets:
-- समाचार-तथ्य: **इस समाचार का विशिष्ट राजस्थान तथ्य (रैंक/मील का पत्थर/प्रथम/नया प्रावधान)**
-- नाम: **योजना/स्थान/कार्यक्रम का पूरा नाम**
-- स्थान: **राजस्थान का ज़िला या क्षेत्र**
-- विभाग: **राज्य मंत्रालय/विभाग**
-- पाठ्यक्रम कड़ी: **भूगोल/अर्थव्यवस्था/राजव्यवस्था/इतिहास/संस्कृति** — विशिष्ट विषय
-
-प्रकार 8 — संविधान/विधेयक/निर्णय (पारित विधेयक, संशोधन, SC निर्णय, नए कानून, चुनावी सुधार, RTI/RTE)
-bullets:
-- समाचार-तथ्य: **इस समाचार का विशिष्ट प्रावधान/परिवर्तन/निर्णय**
-- नाम: **विधेयक/संशोधन/निर्णय का सटीक नाम**
-- अनुच्छेद/प्रावधान: **अनुच्छेद संख्या**
-- क्या बदलता है: एक पंक्ति
-- पारित: **संसद/राष्ट्रपति/SC**
-
-प्रकार 9 — अर्थव्यवस्था/वित्त/RBI (GDP आँकड़े, RBI निर्णय, रेपो दर, बजट, आर्थिक सूचकांक, व्यापार, मुद्रास्फीति, SEBI)
-bullets:
-- समाचार-तथ्य: **इस समाचार की विशिष्ट दर/रैंक/संख्या/निर्णय**
-- नीति/रिपोर्ट/दर: **सटीक नाम**
-- क्रियान्वयन निकाय: **RBI/वित्त/NITI/SEBI**
-- परिवर्तन: **पुराना** से **नया**, यदि लागू
-- वैश्विक स्थिति: **भारत की वैश्विक रैंक/स्थिति**
-
-राजस्थान प्राथमिकता नियम:
-यदि समाचार में कोई भी — अप्रत्यक्ष भी — राजस्थान संबंध हो, तो हमेशा प्रकार 7 प्रारूप अपनाएँ।
-RPSC पेपर में 40% राजस्थान सामग्री होती है। जहाँ भी राजस्थान कोण हो उसे उभारें।
-
-डिफ़ॉल्ट — यदि कोई प्रकार स्पष्ट रूप से फिट न हो:
-बुलेट 1: इस समाचार का विशिष्ट परीक्षा-योग्य तथ्य।
-बुलेट 2-5: अपने ज्ञान से सहायक तथ्य। नाम, संख्या, प्रथम, रिकॉर्ड, स्थानों पर ध्यान दें।
-
-सभी प्रकारों के लिए कठोर नियम:
-- ठीक 5 बुलेट — न कम न ज़्यादा
-- प्रत्येक बुलेट = एक संभावित MCQ उत्तर
-- हर मुख्य परीक्षा-योग्य तथ्य को **डबल एस्टरिस्क** से बोल्ड करें
-- प्रत्येक बुलेट अधिकतम 15 शब्द
-- rpsc_angle अधिकतम 2 पंक्तियाँ: "RPSC पूछ सकता है: Q1: प्रश्न? / Q2: प्रश्न? / Q3: प्रश्न?"
-- कभी राजनीतिक दलों का उल्लेख न करें
-- किसी भी प्रकार की राजनीतिक फ्रेमिंग न करें
-- कोई पैडिंग नहीं, कोई पुनरावृत्ति नहीं, कोई राय नहीं
-- बुलेट 2-5 के लिए अपने प्रशिक्षण-ज्ञान का उपयोग करें
 """
 
 # Map the combined prompt's detected news_type → canonical ca_categories name. TYPE
@@ -1943,7 +1976,11 @@ def gen_main(item, lang, depth="standard", suggested_angle=None, prev_angles=Non
     data["rpsc_angle"] = data.get("rpsc_angle") or ""
     data["verdict"] = (data.get("verdict") or "YES").strip().upper()
     data["needs_verify"] = bool(data.get("needs_verify"))
-    data["news_type"] = str(data.get("news_type") or "").strip().upper()   # "1".."9" or "DEFAULT"
+    # Normalise news_type: the §10 "TYPE 1 — …" headers make the model sometimes echo
+    # "TYPE 1" instead of "1"; extract the digit so _category_from_type keeps matching.
+    _nt_raw = str(data.get("news_type") or "").strip().upper()
+    _nt_m = re.search(r"[1-9]", _nt_raw)
+    data["news_type"] = _nt_m.group(0) if _nt_m else ("DEFAULT" if "DEFAULT" in _nt_raw else _nt_raw)
     # Language-aware title (HI authors a Hindi title) so the Hindi PDF + Telegram caption
     # show Hindi headlines; fall back to the scraped headline only if the model omits it.
     data["title"] = (data.get("title") or item.get("title") or "").replace("**", "").strip()
