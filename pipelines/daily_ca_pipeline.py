@@ -1873,7 +1873,7 @@ def record_content_rag(date_str):
         ot = (o.get("title") or o.get("title_en")) if o else None
         edited = bool(o) and ((ot is not None and ot != ftitle) or ob != fb or oa != fa)
         rows.append({
-            "date": date_str, "item_id": iid or None,
+            "date": date_str, "item_id": iid or None, "item_type": "main",
             "news_type": _proxy_type(cat), "category": cat,
             "depth": it.get("depth") or "standard",
             "item_title": ftitle, "hook": it.get("summary") or "",
@@ -1882,10 +1882,42 @@ def record_content_rag(date_str):
             "was_edited": edited, "edit_count": 1 if edited else 0,
             "approved_at": now,
         })
+
+    # ADDITION 2 — also learn from the kept also-in-news one-liners (item_type='also_in_news').
+    # final_bullets = [the published one-liner]; original_bullets = [the draft one-liner];
+    # was_edited = the curator changed it. These feed gen_also's SLIM prompt next day.
+    try:
+        also = C.sb_select("daily_ca_items", select="*", params={
+            "date": f"eq.{date_str}", "language": "eq.EN",
+            "is_main": "eq.false", "limit": "20"}) or []
+    except Exception:
+        also = []
+    for it in also:
+        if (it.get("status") or "") == "rejected":
+            continue
+        iid = str(it.get("id") or "")
+        cat = it.get("category") or ""
+        fl = (it.get("one_liner") or it.get("summary") or "").strip()
+        if not fl:
+            continue
+        o = orig_by_id.get(iid, {})
+        ol = (o.get("one_liner") or o.get("summary") or fl).strip() if o else fl
+        rows.append({
+            "date": date_str, "item_id": iid or None, "item_type": "also_in_news",
+            "news_type": _proxy_type(cat), "category": cat, "depth": None,
+            "item_title": (it.get("title") or "").replace("**", "").strip(), "hook": None,
+            "original_bullets": [ol], "final_bullets": [fl],
+            "original_rpsc_angle": None, "final_rpsc_angle": it.get("rpsc_angle") or None,
+            "was_edited": bool(o) and ol != fl, "edit_count": 1 if (bool(o) and ol != fl) else 0,
+            "approved_at": now,
+        })
+
     try:
         C.sb_upsert("content_rag", rows, on_conflict="date,item_id")
-        C.log(f"   ✓ §7B content_rag: recorded {len(rows)} approved exemplar(s) "
-              f"({sum(1 for r in rows if r['was_edited'])} edited)")
+        n_also = sum(1 for r in rows if r["item_type"] == "also_in_news")
+        C.log(f"   ✓ §7B content_rag: recorded {len(rows)} exemplar(s) "
+              f"({len(rows)-n_also} main + {n_also} also, "
+              f"{sum(1 for r in rows if r['was_edited'])} edited)")
     except Exception as e:
         C.log(f"   ⚠ content_rag upsert failed: {e}")
     return len(rows)
@@ -1955,17 +1987,39 @@ def _rag_examples(category, depth=None, n=2):
     as style/quality exemplars. Same category first; if none, fall back to same depth.
     Returns up to n rows (newest first). Empty list on day 1 → block becomes a no-op."""
     try:
+        # item_type=main guard: never feed also-in-news one-liners into main authoring (ADDITION 2).
         rows = C.sb_select("content_rag", select="item_title,final_bullets,final_rpsc_angle,depth,category",
-                           params={"category": f"eq.{category}", "order": "approved_at.desc.nullslast",
-                                   "limit": str(n)}) or []
+                           params={"category": f"eq.{category}", "item_type": "eq.main",
+                                   "order": "approved_at.desc.nullslast", "limit": str(n)}) or []
         if not rows and depth:
             rows = C.sb_select("content_rag", select="item_title,final_bullets,final_rpsc_angle,depth,category",
-                               params={"depth": f"eq.{depth}", "order": "approved_at.desc.nullslast",
-                                       "limit": str(n)}) or []
+                               params={"depth": f"eq.{depth}", "item_type": "eq.main",
+                                       "order": "approved_at.desc.nullslast", "limit": str(n)}) or []
         return rows
     except Exception as e:
         C.log(f"   ⚠ rag lookup failed: {e}")
         return []
+
+
+def _also_rag_examples(n=3):
+    """ADDITION 2 — recent curator-approved also-in-news one-liners as style exemplars for
+    gen_also. Edited ones first (they show what 'good' looks like), then most recent."""
+    try:
+        rows = C.sb_select("content_rag", select="final_bullets,was_edited,approved_at",
+                           params={"item_type": "eq.also_in_news",
+                                   "order": "was_edited.desc.nullslast,approved_at.desc.nullslast",
+                                   "limit": str(n)}) or []
+    except Exception as e:
+        C.log(f"   ⚠ also-rag lookup failed: {e}"); return []
+    out = []
+    for r in rows:
+        fb = r.get("final_bullets")
+        if isinstance(fb, str):
+            try: fb = json.loads(fb)
+            except Exception: fb = [fb]
+        if fb:
+            out.append(str(fb[0]))
+    return out
 
 
 def _rag_block(category, depth=None, n=2):
@@ -2099,7 +2153,13 @@ def gen_also(item):
     """Bench / also-in-news item — LIGHTWEIGHT (cost optimisation): title + one-liner
     (EN+HI) + a single-line rpsc_angle ONLY. No summary/context/bullets (that full
     authoring is reserved for the top-5 main items via gen_main). Uses Haiku."""
-    user = (f"Source ({item['source']}): {item['text']}\nCategory: {item.get('category')}.\n\n"
+    # ADDITION 2 — show the curator-approved one-liners as style exemplars (self-improving).
+    _ex = _also_rag_examples(3)
+    ex_block = ("Examples of good one-liners the curator approved:\n"
+                + "\n".join(f"- {e}" for e in _ex)
+                + "\nWrite in the same style and fact-density.\n\n") if _ex else ""
+    user = (f"{ex_block}"
+            f"Source ({item['source']}): {item['text']}\nCategory: {item.get('category')}.\n\n"
             "Write a SINGLE-LINE exam fact for this news — NO bullet points, NO background, "
             "NO family or personal angles, NO quotes or emotions. "
             "Format the one_liner as: [Who/What] + [did what] + [key number/name]. "

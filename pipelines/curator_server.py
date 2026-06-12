@@ -222,6 +222,7 @@ def edit_item(date, iid):
     patch = {}
     if "title" in data:      patch["title"]      = (data.get("title") or "").replace("**", "").strip()
     if "summary" in data:    patch["summary"]    = (data.get("summary") or "").strip()
+    if "one_liner" in data:  patch["one_liner"]  = (data.get("one_liner") or "").strip()   # bench edit
     if "rpsc_angle" in data: patch["rpsc_angle"] = (data.get("rpsc_angle") or "").strip()
     if "bullets" in data:
         patch["bullets"] = [str(b).strip() for b in (data.get("bullets") or []) if str(b).strip()]
@@ -302,6 +303,35 @@ def change_depth(date, iid):
     except Exception as e:
         C.log(f"  ⚠ change_depth {iid} failed: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/curator/<date>/item/<int:iid>/bench-reject", methods=["POST"])
+@require_auth
+def bench_reject(date, iid):
+    """ADDITION 1 — reject an also-in-news bench item: learn the pattern (§8 Haiku →
+    rejection_learnings + topic_blacklist), delete any of its MCQs, and mark it
+    status=rejected on EN + HI so it drops out of also-in-news / PDF / content_rag.
+    No auto-promote (the bench still has the rest). Separate from the top-5 /reject flow."""
+    data = request.get_json(silent=True) or {}
+    reason = (data.get("reason") or "").strip()
+    if not reason:
+        return jsonify({"error": "rejection reason required"}), 400
+    it = _item_row(date, iid)
+    result = learning.log_rejection(
+        item_title=(it or {}).get("title", ""),
+        category=(it or {}).get("category", ""),
+        rejected_text=(it or {}).get("one_liner") or (it or {}).get("summary") or "",
+        topic="", rejection_reason=reason, item_id=str(iid), session_id=date)
+    if it:
+        _set_status_with_hi(date, it, status="rejected", is_main=False)
+    try:
+        for m in (C.sb_select("daily_mcqs", select="id",
+                              params={"source_item_id": f"eq.{iid}", "limit": "50"}) or []):
+            C.sb_delete("daily_mcqs", {"id": str(m["id"])})
+    except Exception as e:
+        C.log(f"  ⚠ bench-reject MCQ delete failed (non-fatal): {e}")
+    C.log(f"  ✓ bench item {iid} rejected + learned · {reason}")
+    return jsonify({"ok": True, "learning": result}), 200
 
 
 @app.route("/curator/<date>/item/<int:iid>/promote", methods=["POST"])

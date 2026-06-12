@@ -360,18 +360,39 @@
                     {% for item in also_items %}
                     {% set iid = item.id %}
                     {% set title = (item.title or "(no title)") | replace("**", "") %}
-                    {% set hook = item.summary or "" %}
+                    {% set oneliner = (item.one_liner or item.summary or "") | replace("**", "") %}
                     <div class="also-item" data-section="also" data-id="{{ iid }}">
                         <input type="checkbox" name="selected_ids" value="{{ iid }}" style="display:none"
                                class="sel-check also-check" data-id="{{ iid }}"
                                data-title="{{ title }}" data-category="{{ item.category or '' }}"
-                               data-topic="{{ item.topic or '' }}" data-summary="{{ hook }}">
+                               data-topic="{{ item.topic or '' }}" data-summary="{{ oneliner }}">
                         <div class="also-body">
                             <div class="also-title">{{ title }}</div>
-                            {% if hook %}<div class="also-summary">{{ hook }}</div>{% endif %}
-                            <div class="also-tags">Score: {{ item.priority if item.priority is not none else "—" }}{% if item.category %} · {{ item.category }}{% endif %}</div>
+                            <div class="also-summary" id="also-text-{{ iid }}">{{ oneliner }}</div>
+                            <div class="also-tags">Score: {{ item.priority if item.priority is not none else "—" }}{% if item.category %} · {{ item.category }}{% endif %}<span class="saved-flash" id="flash-also-{{ iid }}">Saved ✓</span></div>
+                            <!-- inline edit (bench one-liner) -->
+                            <div class="edit-wrap" id="also-edit-{{ iid }}">
+                                <textarea class="edit-input" rows="2">{{ oneliner }}</textarea>
+                                <div class="edit-actions">
+                                    <button type="button" class="mini-btn mini-save" onclick="saveAlso('{{ iid }}')">Save ✓</button>
+                                    <button type="button" class="mini-btn mini-cancel" onclick="cancelAlso('{{ iid }}')">Cancel</button>
+                                </div>
+                            </div>
+                            <!-- inline reject (free text) -->
+                            <div class="edit-wrap" id="also-reject-{{ iid }}">
+                                <div style="font-size:12px;font-weight:600;color:#b91c1c;margin-bottom:4px">Why rejecting this?</div>
+                                <textarea class="edit-input" style="border-color:#fca5a5" rows="2" placeholder="Be specific — it helps the system learn…"></textarea>
+                                <div class="edit-actions">
+                                    <button type="button" class="mini-btn" style="background:#dc2626;color:#fff" onclick="rejectAlso('{{ iid }}')">Reject and Learn →</button>
+                                    <button type="button" class="mini-btn mini-cancel" onclick="document.getElementById('also-reject-{{ iid }}').classList.remove('open')">Cancel</button>
+                                </div>
+                            </div>
                         </div>
-                        <button type="button" class="mini-btn mini-save" style="background:#16a34a" onclick="promoteManual('{{ iid }}')">▲ Promote</button>
+                        <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+                            <button type="button" class="mini-btn mini-cancel" onclick="editAlso('{{ iid }}')">✏️ Edit</button>
+                            <button type="button" class="mini-btn" style="background:#fff1f2;color:#b91c1c;border:1px solid #fca5a5" onclick="rejectAlsoOpen('{{ iid }}')">✗ Reject</button>
+                            <button type="button" class="mini-btn mini-save" style="background:#16a34a" onclick="promoteManual('{{ iid }}')">▲ Promote</button>
+                        </div>
                     </div>
                     {% endfor %}
                 </div>
@@ -639,6 +660,41 @@ function autoPromote() {
     return true;
 }
 function promoteManual(id) { promoteToFull(id, false); }
+
+// ── ADDITION 1 — bench item edit + reject (does NOT promote; promote flow untouched) ──
+function editAlso(id) { document.getElementById(`also-edit-${id}`).classList.add('open'); }
+function cancelAlso(id) {
+    const w = document.getElementById(`also-edit-${id}`);
+    w.querySelector('textarea').value = document.getElementById(`also-text-${id}`).textContent;
+    w.classList.remove('open');
+}
+async function saveAlso(id) {
+    const w = document.getElementById(`also-edit-${id}`);
+    const v = w.querySelector('textarea').value.trim();
+    if (await postItem(id, 'edit', { one_liner: v })) {
+        document.getElementById(`also-text-${id}`).textContent = v;
+        const cb = document.querySelector(`.also-check[data-id="${id}"]`);
+        if (cb) cb.dataset.summary = v;
+        w.classList.remove('open'); flash('also', id); showToast('Saved ✓', 'success');
+    }
+}
+function rejectAlsoOpen(id) { document.getElementById(`also-reject-${id}`).classList.add('open'); }
+async function rejectAlso(id) {
+    const w = document.getElementById(`also-reject-${id}`);
+    const reason = w.querySelector('textarea').value.trim();
+    if (!reason) { showToast('Please enter a reason', 'error'); return; }
+    try {
+        const r = await fetch(`/curator/${date}/item/${id}/bench-reject`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ reason }) });
+        const d = await r.json();
+        if (r.ok) {
+            const learn = d.learning?.rejection_learning || {};
+            showToast(learn.blacklisted ? `✓ Learned + blacklisted: "${learn.pattern}"` : '✓ Rejection learned — removed from bench', 'success');
+            document.querySelector(`.also-item[data-id="${id}"]`)?.remove();
+            updateCount();
+        } else showToast('⚠ ' + (d.error || 'could not reject'), 'error');
+    } catch (e) { showToast('Network error', 'error'); }
+}
 
 // Author full content for a bench item, then replace its compact row with a full editable
 // card in the Top-5 list — identical to a top-5 item (category/depth dropdowns, editable
