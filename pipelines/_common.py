@@ -167,20 +167,65 @@ def _sys_param(system, cache_system):
         return [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
     return system
 
+# ── self-healing model selection ────────────────────────────────────────────────
+# A pinned model id (e.g. claude-sonnet-4-20250514) eventually retires and 404s, which
+# previously killed the whole pipeline. If the requested model is unavailable we resolve
+# the newest same-family model from the live /v1/models list once, cache it for the
+# process, and retry — so a model retirement can NEVER silently break authoring again.
+_MODEL_OVERRIDE = {}                       # requested id → resolved replacement (per process)
+_FALLBACK_CHAIN = {                        # offline fallback if /v1/models can't be reached
+    "haiku": "claude-haiku-4-5-20251001",
+    "sonnet": "claude-sonnet-4-5-20250929",
+    "opus": "claude-opus-4-5-20251101",
+}
+
+def _family(model):
+    m = (model or "").lower()
+    return "haiku" if "haiku" in m else "opus" if "opus" in m else "sonnet"
+
+def _resolve_fallback(requested):
+    """Pick the newest available model in the same family as `requested`."""
+    fam = _family(requested)
+    try:
+        data = requests.get("https://api.anthropic.com/v1/models",
+                            headers={"x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01"},
+                            timeout=20).json().get("data", [])
+        ids = [m["id"] for m in data if m.get("id")]     # API returns newest first
+        same = [i for i in ids if fam in i.lower()]
+        return same[0] if same else (next((i for i in ids if "sonnet" in i.lower()), None) or (ids[0] if ids else None))
+    except Exception as e:
+        log(f"   ⚠ /v1/models lookup failed ({e}); using offline fallback")
+        return _FALLBACK_CHAIN.get(fam)
+
+def _create(model, **kwargs):
+    """claude().messages.create with auto-fallback if `model` was retired/renamed (404
+    not_found_error). Resolves once per requested id, caches, retries, and logs loudly."""
+    use = _MODEL_OVERRIDE.get(model, model)
+    try:
+        return claude().messages.create(model=use, **kwargs)
+    except Exception as e:
+        emsg = str(e).lower()
+        is_model_gone = ("not_found" in emsg or "model:" in emsg) and model not in _MODEL_OVERRIDE
+        if not is_model_gone:
+            raise
+        fb = _resolve_fallback(model)
+        if not fb or fb == use:
+            raise
+        _MODEL_OVERRIDE[model] = fb
+        log(f"   ⚠ MODEL '{model}' unavailable (retired?) → auto-healed to '{fb}'. "
+            f"Update CLAUDE_MODEL/HAIKU_MODEL in _common.py to pin it.")
+        return claude().messages.create(model=fb, **kwargs)
+
 def claude_json(system, user, max_tokens=1000, model=CLAUDE_MODEL, cache_system=False):
     """Call Claude and parse a JSON object from the reply (robust to fences)."""
-    msg = claude().messages.create(
-        model=model, max_tokens=max_tokens, system=_sys_param(system, cache_system),
-        messages=[{"role": "user", "content": user}],
-    )
+    msg = _create(model, max_tokens=max_tokens, system=_sys_param(system, cache_system),
+                  messages=[{"role": "user", "content": user}])
     text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip()
     return _parse_json(text), text
 
 def claude_text(system, user, max_tokens=1000, model=CLAUDE_MODEL, cache_system=False):
-    msg = claude().messages.create(
-        model=model, max_tokens=max_tokens, system=_sys_param(system, cache_system),
-        messages=[{"role": "user", "content": user}],
-    )
+    msg = _create(model, max_tokens=max_tokens, system=_sys_param(system, cache_system),
+                  messages=[{"role": "user", "content": user}])
     return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip()
 
 def _parse_json(text):
