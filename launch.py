@@ -5,6 +5,22 @@ Routes to curator Flask server or pipeline based on SERVICE_MODE env var.
 """
 import os, sys, subprocess
 
+# Populate os.environ from .env using the project's OWN loader (pipelines._common.ENV),
+# so _require_env below sees the same values the rest of the code uses when run locally
+# (e.g. on the Mac via launchd). python-dotenv mis-picks a duplicate/empty key in this
+# .env; _common's loader resolves it correctly. setdefault never overrides a real env var
+# already injected by Railway, so this is a no-op in production.
+try:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from pipelines import _common as _C
+    for _k, _v in (_C.ENV or {}).items():
+        # set from .env when the env var is missing OR present-but-empty; never clobber a
+        # real non-empty value (Railway-injected secrets keep priority).
+        if _v not in (None, "") and not os.environ.get(_k):
+            os.environ[_k] = str(_v)
+except Exception:
+    pass
+
 SERVICE_MODE = os.environ.get("SERVICE_MODE", "")
 PORT = int(os.environ.get("PORT", "8080"))
 

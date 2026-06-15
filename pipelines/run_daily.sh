@@ -64,9 +64,12 @@ python3 pipelines/upload_pdfs.py "$DATE" || \
 # publish path (curator_server._publish / curator_auto_publish) IMMEDIATELY
 # after the PDF is delivered to the channel — so the PDF always lands first.
 
+echo; echo ">>> STEP 7: scheduled_jobs.py  (Sun → weekly coverage report, 1st → monthly trends)"
+python3 pipelines/scheduled_jobs.py || echo "⚠ scheduled_jobs exited non-zero (non-fatal)"
+
 echo; echo "###############################################################"
 echo "#  DONE — outputs/daily-ca/EN/$DATE.pdf  &  HI/$DATE.pdf"
 echo "#  ✓ Draft sent for approval via Telegram"
-echo "#  ✓ Auto-publishes at 8:30 AM IST if no response"
+echo "#  ✓ Auto-publishes at 6:00 AM IST if no response"
 echo "#    Run manually: python3 pipelines/curator_auto_publish.py $DATE"
 echo "###############################################################"
