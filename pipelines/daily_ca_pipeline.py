@@ -2086,7 +2086,18 @@ def gen_main(item, lang, depth="standard", suggested_angle=None, prev_angles=Non
             '"rpsc_angle": "the 3-5 most testable facts joined by  ·  (e.g. Ministry of MSME · '
             'Launched 2023 · 18 trades · Rs 13,000 crore), NOT questions, no header word '
             '(null if verdict NO)"}')
-    data, _ = C.claude_json(sysmsg, user, max_tokens=1200, cache_system=True)  # cache SYS_EN/SYS_HI
+    # max_tokens=2400: 7-bullet (important) and 8-12-bullet (landmark) authoring — especially
+    # Hindi/Devanagari, which is token-heavy — overran the old 1200 cap and returned TRUNCATED
+    # JSON. Fault-tolerant: a malformed/truncated reply must NEVER crash the whole pipeline
+    # (set -euo pipefail) — treat it as a soft drop (verdict NO) so the loop backfills instead.
+    try:
+        data, _ = C.claude_json(sysmsg, user, max_tokens=2400, cache_system=True)  # cache SYS_EN/SYS_HI
+        if not isinstance(data, dict):
+            raise ValueError("non-dict reply")
+    except Exception as e:
+        C.log(f"   ⚠ gen_main parse/author failure ({lang}) — soft-dropping item: {e}")
+        return {"verdict": "NO", "reason": f"author error: {str(e)[:60]}", "bullets": [],
+                "rpsc_angle": "", "needs_verify": False, "news_type": "", "title": ""}
     data["bullets"] = data.get("bullets") or []
     data["rpsc_angle"] = data.get("rpsc_angle") or ""
     data["verdict"] = (data.get("verdict") or "YES").strip().upper()
@@ -2495,6 +2506,19 @@ def main(news_date, label_date, dry_run=False):
                 nxt = bench[bi]; bi += 1; queue.append(nxt)
             continue
         hi = gen_main(it, "HI", depth, angle, prev_angles, ti_row)
+        if hi.get("verdict") == "NO" or not hi.get("bullets"):
+            # EN already cleared the STEP-1 testability gate, so the item IS testable. A HI
+            # verdict=NO (or empty/truncated reply) is almost always language-variance — the HI
+            # pass re-adjudicating differently — not a real reject. Retry HI ONCE before giving
+            # up, so we don't lose a verified-good item to a transient miss.
+            C.log(f"     ↻ HI mismatch (verdict={hi.get('verdict')}, bullets={len(hi.get('bullets') or [])}) — retrying HI once")
+            hi = gen_main(it, "HI", depth, angle, prev_angles, ti_row)
+        if hi.get("verdict") == "NO" or not hi.get("bullets"):
+            # Still failed — don't publish a half-Hindi item; drop + backfill.
+            C.log(f"     ⤫ Hindi authoring still failed for {(it.get('title') or '')[:40]} — dropping + backfilling")
+            if bi < len(bench):
+                nxt = bench[bi]; bi += 1; queue.append(nxt)
+            continue
         needs_verify = bool(en.get("needs_verify") or hi.get("needs_verify"))
         if cat != it.get("category"):
             C.log(f"     ↳ category: {it.get('category')} → {cat} (TYPE {en.get('news_type')})")
