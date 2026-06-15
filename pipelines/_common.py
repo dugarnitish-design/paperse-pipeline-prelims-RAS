@@ -51,7 +51,7 @@ SERVICE_KEY  = ENV.get("SUPABASE_SERVICE_KEY")
 ANTHROPIC_KEY = ENV.get("ANTHROPIC_API_KEY")
 
 # ── Config ────────────────────────────────────────────────────────────────────
-CLAUDE_MODEL     = "claude-sonnet-4-20250514"   # Sonnet 4.0 (stable, until June 15 2026)
+CLAUDE_MODEL     = "claude-sonnet-4-5-20250929"  # Sonnet 4.5 (claude-sonnet-4-20250514 retired 2026-06-15)
 HAIKU_MODEL      = "claude-haiku-4-5-20251001"  # cheap/fast — PYQ relevance YES/NO filter
 EMBED_MODEL      = "paraphrase-multilingual-MiniLM-L12-v2"
 # NOTE: spec says collection 'paperse_prelims_pyq'; the actual built collection
