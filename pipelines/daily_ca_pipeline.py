@@ -1299,6 +1299,9 @@ RPSC NEVER tests:
 - Family members of news subjects
 - Corporate deals or stock market news
 - Foreign news without direct India angle
+- Foreign leaders' claims/statements about other countries (e.g. "Trump claims a deal
+  with Iran") UNLESS India is a primary affected party
+- Foreign bilateral agreements/conflicts where India is NOT a party to them
 - Routine government meetings without outcome
 
 RPSC ALWAYS tests:
@@ -1476,6 +1479,9 @@ RPSC कभी नहीं पूछता:
 - समाचार-विषयों के परिवार सदस्य
 - कॉर्पोरेट डील या शेयर बाज़ार समाचार
 - बिना प्रत्यक्ष भारत-संबंध के विदेशी समाचार
+- विदेशी नेताओं के अन्य देशों के बारे में दावे/बयान (जैसे "ट्रम्प का ईरान से समझौते का दावा") —
+  जब तक भारत प्रत्यक्ष रूप से प्रभावित प्रमुख पक्ष न हो
+- विदेशी द्विपक्षीय समझौते/संघर्ष जिनमें भारत पक्षकार नहीं है
 - बिना परिणाम की नियमित सरकारी बैठकें
 
 RPSC हमेशा पूछता है:
@@ -2449,8 +2455,15 @@ def main(news_date, label_date, dry_run=False):
     queue = list(items_to_generate[:5])
     _chosen = {id(x) for x in queue}
     bench = [b for b in also_items if id(b) not in _chosen]
-    bench_used, bi = set(), 0
-    while len(main_rows_inserted) < 5 and queue:
+    bi = 0
+    MIN_MAIN, MAX_PER_CAT = 5, 2
+    _bench_ids = {id(b) for b in bench}
+    promoted_ids = set()        # BUG 1: ONLY bench items actually published as main are
+                                # removed from also-in-news (a failed/ capped backfill attempt
+                                # must NOT drain the bench — that left also-in-news empty).
+    cat_count = {}              # BUG 2: at most MAX_PER_CAT main items per category
+    deferred_to_also = []       # main candidates skipped by the category cap → keep for also
+    while len(main_rows_inserted) < MIN_MAIN and queue:
         it = queue.pop(0)
         # Importance-based depth (§4): detected BEFORE authoring from score + topic
         # intelligence + coverage, so gen_main writes the right bullet count. news_type
@@ -2469,14 +2482,20 @@ def main(news_date, label_date, dry_run=False):
             C.log(f"     ⤫ author-gate dropped: {(it.get('title') or '')[:45]} — {en.get('reason', '')[:60]}")
             if bi < len(bench):                       # backfill with the next bench item
                 nxt = bench[bi]; bi += 1
-                bench_used.add(id(nxt)); queue.append(nxt)
-            continue
-        hi = gen_main(it, "HI", depth, angle, prev_angles, ti_row)
-        needs_verify = bool(en.get("needs_verify") or hi.get("needs_verify"))
+                queue.append(nxt)                     # BUG 1: do NOT mark used — only a
+            continue                                  # successful promotion removes it from also
         # Category from the detected news_type (overrides the loose keyword scorer).
         # Pass title+summary so TYPE 7 picks the right Rajasthan sub-category.
         cat = _category_from_type(en.get("news_type"), it.get("category"),
                                   f"{it.get('title', '')} {en.get('summary') or ''}")
+        if cat_count.get(cat, 0) >= MAX_PER_CAT:      # BUG 2: ≤2 main items per category
+            C.log(f"     ⤫ category cap ({MAX_PER_CAT}) for {cat} — deferring to also-in-news")
+            deferred_to_also.append(it)               # keep it for the also-in-news section
+            if bi < len(bench):
+                nxt = bench[bi]; bi += 1; queue.append(nxt)
+            continue
+        hi = gen_main(it, "HI", depth, angle, prev_angles, ti_row)
+        needs_verify = bool(en.get("needs_verify") or hi.get("needs_verify"))
         if cat != it.get("category"):
             C.log(f"     ↳ category: {it.get('category')} → {cat} (TYPE {en.get('news_type')})")
         base = dict(date=label_date.isoformat(), category=cat, tier=it["tier"],
@@ -2499,10 +2518,26 @@ def main(news_date, label_date, dry_run=False):
         en_id = next((r["id"] for r in ins if r["language"] == "EN"), ins[0]["id"])
         main_rows_inserted.append({"id": en_id, "category": cat,
                                    "title": en.get("title"), "needs_verify": needs_verify})
+        cat_count[cat] = cat_count.get(cat, 0) + 1
+        if id(it) in _bench_ids:
+            promoted_ids.add(id(it))                  # bench → main: now exclude it from also
 
-    # Bench items promoted into mains (backfill) must NOT also appear in also-in-news.
-    for j, it in enumerate([a for a in also_items if id(a) not in bench_used], 1):
-        C.log(f"   • also {j}/{len(also_items)}: {it['category']} …")
+    # BUG 1: also-in-news = every bench item NOT promoted to main + any category-capped
+    # main candidate, deduped. Failed/ capped backfill attempts stay here, so the section
+    # is never empty. Cap at 8 (DB bench depth; PDF shows ≤5).
+    _also_seen, also_final = set(), []
+    for it in (also_items + deferred_to_also):
+        if id(it) in promoted_ids or id(it) in _also_seen:
+            continue
+        _also_seen.add(id(it)); also_final.append(it)
+    also_final = also_final[:8]
+    if len(main_rows_inserted) < MIN_MAIN:
+        C.log(f"   ⚠ LOW-MAIN DAY: {len(main_rows_inserted)}/{MIN_MAIN} exam-worthy main items "
+              f"(author-gate rejected the rest); also-in-news ({len(also_final)}) carries the slack.")
+    if len(also_final) < 5:
+        C.log(f"   ⚠ only {len(also_final)} also-in-news items (target 5) — limited candidate pool today.")
+    for j, it in enumerate(also_final, 1):
+        C.log(f"   • also {j}/{len(also_final)}: {it['category']} …")
         a = gen_also(it)
         base = dict(date=label_date.isoformat(), category=it["category"], tier=it["tier"],
                     source=it["source"], rajasthan_angle=it["rajasthan_angle"],
@@ -2519,7 +2554,7 @@ def main(news_date, label_date, dry_run=False):
 
     total = C.sb_count("daily_ca_items", {"date": f"eq.{label_date.isoformat()}"})
     C.log(f"\n✓ STEP 2 complete — {total} rows in daily_ca_items for {label_date.isoformat()} "
-          f"({len(items_to_generate[:5])} main ×2 langs + {len(also_items)} also ×2 langs)")
+          f"({len(main_rows_inserted)} main ×2 langs + {len(also_final)} also ×2 langs)")
     C.log(f"  main source-item ids (for MCQs): {[r['id'] for r in main_rows_inserted]}")
 
     return {

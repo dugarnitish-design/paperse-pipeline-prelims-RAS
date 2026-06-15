@@ -290,14 +290,14 @@ def render_html(date, lang, main_items, also_items, labels, linked_pyqs=None):
 
     also_html = ""
     if also_items:
-        if also_style == "full":          # title + one-liner description
-            lis = "".join(
-                f"<li><span class='t'>{esc(a.get('title')).replace('**','')}</span> — {md_bold(a.get('one_liner'))}</li>"
-                for a in also_items)
-        else:                              # 'compact' / 'minimal' → title only
-            lis = "".join(
-                f"<li><span class='t'>{esc(a.get('title')).replace('**','')}</span></li>"
-                for a in also_items)
+        # BUG 5: ALWAYS show the one-liner description (never title-only) so students can
+        # actually learn the fact. Density is handled by trimming the COUNT (also_n above),
+        # not by dropping the description.
+        lis = ""
+        for a in also_items:
+            t = esc(a.get('title')).replace('**', '')
+            desc = md_bold(a.get('one_liner') or a.get('summary') or "")
+            lis += f"<li><span class='t'>{t}</span>{(' — ' + desc) if desc else ''}</li>"
         also_html = f"<div class='also'><h2>{L['also']}</h2><ul>{lis}</ul></div>"
 
     # FIX 3: the "Static connects today" summary line is removed (internal metadata).
@@ -351,7 +351,10 @@ def build_pdf(date, lang, linked_pyqs=None):
     # auto-published brief. Rejected is the only status that is ever hidden.
     _REJECTED = "rejected"
     main_items = [r for r in main_items if (r.get("status") or "") != _REJECTED]
-    also_items = [r for r in also_items if (r.get("status") or "") != _REJECTED]
+    # BUG 6: also-in-news must exclude rejected AND promoted/published items (a promoted
+    # bench item lives in main now; it must never also appear — or leave a ghost — in the
+    # also-in-news list). Keep 'pending' + 'also_in_news' so auto-published briefs render.
+    also_items = [r for r in also_items if (r.get("status") or "") not in (_REJECTED, "published")]
     # The bench holds up to 15 also-in-news for curator replacement, but the PDF
     # shows at most 5 (already ordered priority.desc) so the brief stays compact.
     also_items = also_items[:5]
