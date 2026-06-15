@@ -197,12 +197,50 @@ def _resolve_fallback(requested):
         log(f"   ⚠ /v1/models lookup failed ({e}); using offline fallback")
         return _FALLBACK_CHAIN.get(fam)
 
+# USD per 1,000,000 tokens: (input, output, cache_write_5m, cache_read). Override via env
+# (e.g. PRICE_SONNET_IN) if Anthropic changes pricing — see _log_usage.
+_PRICES = {
+    "sonnet": (3.0, 15.0, 3.75, 0.30),
+    "haiku":  (1.0,  5.0, 1.25, 0.10),
+    "opus":   (15.0, 75.0, 18.75, 1.50),
+}
+
+def _log_usage(model, system, msg):
+    """Best-effort: record token usage + computed cost to the api_usage table. NEVER
+    raises — a logging failure must never break a Claude call (set API_USAGE_LOG=0 to
+    disable). `tag` = first 60 chars of the system prompt, so Sonnet calls split into
+    Layer-3 vs gen_main(EN/HI) without threading a label through every call site."""
+    try:
+        if os.environ.get("API_USAGE_LOG", "1") == "0":
+            return
+        u = getattr(msg, "usage", None)
+        if not u:
+            return
+        it = getattr(u, "input_tokens", 0) or 0
+        ot = getattr(u, "output_tokens", 0) or 0
+        cc = getattr(u, "cache_creation_input_tokens", 0) or 0
+        cr = getattr(u, "cache_read_input_tokens", 0) or 0
+        pi, po, pcw, pcr = _PRICES.get(_family(model), _PRICES["sonnet"])
+        cost = (it * pi + ot * po + cc * pcw + cr * pcr) / 1_000_000
+        sys_txt = system if isinstance(system, str) else (
+            system[0].get("text", "") if isinstance(system, list) and system else "")
+        tag = (sys_txt or "").strip().replace("\n", " ")[:60]
+        sb_insert("api_usage", [{
+            "model": model, "tag": tag,
+            "input_tokens": it, "output_tokens": ot,
+            "cache_creation_tokens": cc, "cache_read_tokens": cr,
+            "cost_usd": round(cost, 6),
+        }], returning=False)
+    except Exception:
+        pass  # logging is never allowed to break the pipeline
+
 def _create(model, **kwargs):
     """claude().messages.create with auto-fallback if `model` was retired/renamed (404
-    not_found_error). Resolves once per requested id, caches, retries, and logs loudly."""
+    not_found_error). Resolves once per requested id, caches, retries, and logs loudly.
+    Every successful call's token usage + cost is recorded via _log_usage (best-effort)."""
     use = _MODEL_OVERRIDE.get(model, model)
     try:
-        return claude().messages.create(model=use, **kwargs)
+        msg = claude().messages.create(model=use, **kwargs)
     except Exception as e:
         emsg = str(e).lower()
         is_model_gone = ("not_found" in emsg or "model:" in emsg) and model not in _MODEL_OVERRIDE
@@ -214,7 +252,10 @@ def _create(model, **kwargs):
         _MODEL_OVERRIDE[model] = fb
         log(f"   ⚠ MODEL '{model}' unavailable (retired?) → auto-healed to '{fb}'. "
             f"Update CLAUDE_MODEL/HAIKU_MODEL in _common.py to pin it.")
-        return claude().messages.create(model=fb, **kwargs)
+        use = fb
+        msg = claude().messages.create(model=fb, **kwargs)
+    _log_usage(use, kwargs.get("system"), msg)
+    return msg
 
 def claude_json(system, user, max_tokens=1000, model=CLAUDE_MODEL, cache_system=False):
     """Call Claude and parse a JSON object from the reply (robust to fences)."""
